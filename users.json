@@ -2,7 +2,7 @@
       {
             "id": "2dc79333-19fa-4756-9d95-ac957594e78a",
             "email": "tyshawn@udel.edu",
-            "full_name": "Ty E",
+            "full_name": "TyShawn Elzey",
             "password": "codingisfun",
             "role": "Agent",
             "registered_at": "2026-03-18 13:08:43.926571"
@@ -14,5 +14,13 @@
             "password": "funiscoding",
             "role": "Buyer",
             "registered_at": "2026-03-18 13:25:32.643125"
+      },
+      {
+            "id": "1b447e58-9b3f-4476-87d4-7bc37294cf1e",
+            "email": "tyshawn@gmail.com",
+            "full_name": "Elzey TyShawn",
+            "password": "codingisfun",
+            "role": "Agent",
+            "registered_at": "2026-03-23 18:55:07.744137"
       }
 ]
