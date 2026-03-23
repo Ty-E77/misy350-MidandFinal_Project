@@ -64,13 +64,24 @@ def show_login_page():
             btn_create = st.button("Create Account", use_container_width = True, disabled = False, type = "primary")
 
             if btn_create:
-                if (email == "") or (full_name == "") or (password == ""):
-                    st.warning("Missing required information")
+                with st.spinner("Creating account..."):
+                    time.sleep(1)
+                
+                # -- Checking for duplicate email and making sure an account doesn't exist --
+                new_email = email.strip().lower()
+                existing_user = None
+                for user in users:
+                    if user["email"].strip().lower() == new_email:
+                        existing_user = user
+                        break
+
+                if existing_user is not None:
+                    st.error("An account with this email already exists.")
+                    st.stop()
+                elif not new_email or not password:
+                    st.error("Email and password are required.")
                     st.stop()
                 else:
-                    with st.spinner("Account is being created..."):
-                        time.sleep(5)
-
                         users.append ( {
                         "id": str(uuid.uuid4()),
                         "email": email,
@@ -81,7 +92,7 @@ def show_login_page():
 
         })
                 with json_file_users.open("w", encoding = "utf-8") as f:
-                            json.dump(users, f)
+                            json.dump(users, f, indent = 6)
 
                 st.success("Account created successfully!")
     with tab2:
@@ -134,8 +145,6 @@ def show_main_app_agent():
             st.session_state["page"] = "buyer_inquiries"
             st.rerun()
         
-
-        
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
 
@@ -169,9 +178,6 @@ def show_main_app_buyer():
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.rerun()
-    
-
-
 
 if (
     st.session_state["logged_in"]
