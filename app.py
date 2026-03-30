@@ -51,6 +51,13 @@ if "user" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state["page"] = "home"
 
+# -- Agent Session States --
+if "selected_agent_listing_id" not in st.session_state:
+    st.session_state["selected_agent_listing_id"] = None
+if "selected_other_listing_id" not in st.session_state:
+    st.session_state["selected_other_listing_id"] = None
+
+# -- Buyer Session States -- 
 if "booking_listing_id" not in st.session_state:
     st.session_state["booking_listing_id"] = None
 
@@ -59,6 +66,12 @@ if "selected_listing_id" not in st.session_state:
 
 if "question_listing_id" not in st.session_state:
     st.session_state["question_listing_id"] = None
+
+if "edit_booking_id" not in st.session_state:
+    st.session_state["edit_booking_id"] = None
+
+if "edit_inquiry_id" not in st.session_state:
+    st.session_state["edit_inquiry_id"] = None
 
 # -- Creating registration & login page -- 
 def show_login_page():
@@ -186,10 +199,10 @@ def show_main_app_agent():
 
     # -- Properties Page --
     elif st.session_state["page"] == "properties_listings":
-        st.markdown(f"## View Property Listings")
-        
+        st.markdown("# View Property Listings")
+        st.divider()
 
-        tablist, taball = st.tabs(["My Property Listings", "All Property Listings"])
+        tablist, taball = st.tabs(["My Property Listings", "Other Property Listings"])
 
         with tablist:
             st.markdown("### My Listings")
@@ -199,10 +212,8 @@ def show_main_app_agent():
                 if listing["agent_id"] == st.session_state["user"]["id"]:
                     my_listings.append(listing)
 
-            col_listings, col_filters = st.columns([3, 1])
-
-            with col_filters:
-                st.markdown("#### Filter Listings")
+            with st.container(border=True):
+                st.markdown("###### Filter Listings")
 
                 selected_type_my = st.selectbox(
                     "Property Type",
@@ -224,35 +235,41 @@ def show_main_app_agent():
                 if type_match and status_match:
                     filtered_my_listings.append(listing)
 
-            with col_listings:
-                st.markdown(f"##### Total Listings: {len(filtered_my_listings)}")
+            st.markdown(f"#### My Total Listings: {len(filtered_my_listings)}")
 
-                if not filtered_my_listings:
-                    st.info("You have no listings matching these filters.")
-                else:
-                    for listing in filtered_my_listings:
-                        with st.container(border=True):
+            if not filtered_my_listings:
+                st.info("You have no listings matching these filters.")
+            else:
+                for listing in filtered_my_listings:
+                    with st.container(border=True):
+                        col_title, col_space, col_price = st.columns([3, 1, 1])
+
+                        with col_title:
                             st.markdown(f"### {listing['title']}")
-                            st.write(f"**Address:** {listing['address']}, {listing['city']}, {listing['state']}")
-                            st.write(f"**Price:** ${listing['price']:,}")
-                            st.write(f"**Status:** {listing['status']}")
 
-                            with st.expander("View More Details"):
-                                st.write(f"**Bedrooms:** {listing['bedrooms']}")
-                                st.write(f"**Bathrooms:** {listing['bathrooms']}")
-                                st.write(f"**Square Footage:** {listing['property_sqft']}")
-                                st.write(f"**Type:** {listing['property_type']}")
-                                st.write(f"**Contact Name:** {listing['contact_name']}")
-                                st.write(f"**Contact Email:** {listing['contact_email']}")
-                                st.write(f"**Contact Phone:** {listing['contact_phone']}")
+                        with col_price:
+                            st.markdown(f"### **${listing['price']:,}**")
+
+                        st.markdown(
+                            f"##### **Address:** {listing['address']}, {listing['city']}, {listing['state']}"
+                        )
+                        st.markdown(f"##### **Status:** {listing['status']}")
+
+                        if st.button(
+                            "Manage Listing",
+                            key=f"manage_listing_btn_{listing['id']}",
+                            type="primary",
+                            use_container_width=True
+                        ):
+                            st.session_state["selected_agent_listing_id"] = listing["id"]
+                            st.session_state["page"] = "manage_listing"
+                            st.rerun()
 
         with taball:
-            st.markdown("### All Listings")
-            
-            col_listings, col_filters = st.columns([3, 1])
+            st.markdown("### Other Agent Listings")
 
-            with col_filters:
-                st.markdown("#### Filter Listings")
+            with st.container(border=True):
+                st.markdown("###### Filter Listings")
 
                 selected_type = st.selectbox(
                     "Property Type",
@@ -268,68 +285,425 @@ def show_main_app_agent():
 
             filtered_properties = []
             for listing in properties:
+                # only show listings that are NOT this agent's
+                if listing["agent_id"] == st.session_state["user"]["id"]:
+                    continue
+
                 type_match = selected_type == "All" or listing["property_type"] == selected_type
                 status_match = selected_status == "All" or listing["status"] == selected_status
 
                 if type_match and status_match:
                     filtered_properties.append(listing)
 
-            with col_listings:
-                st.markdown(f"##### Total Listings: {len(filtered_properties)}")
+            st.markdown(f"#### Total Other Listings: {len(filtered_properties)}")
 
-                if not filtered_properties:
-                    st.info("No listings match your filters.")
-                else:
-                    for listing in filtered_properties:
-                        with st.container(border=True):
+            if not filtered_properties:
+                st.info("No listings match your filters.")
+            else:
+                for listing in filtered_properties:
+                    with st.container(border=True):
+                        col_title, col_space, col_price = st.columns([3, 1, 1])
+
+                        with col_title:
                             st.markdown(f"### {listing['title']}")
-                            st.write(f"**Address:** {listing['address']}, {listing['city']}, {listing['state']}")
-                            st.write(f"**Price:** ${listing['price']:,}")
-                            st.write(f"**Status:** {listing['status']}")
 
-                            with st.expander("View More Details"):
-                                st.write(f"**Bedrooms:** {listing['bedrooms']}")
-                                st.write(f"**Bathrooms:** {listing['bathrooms']}")
-                                st.write(f"**Square Footage:** {listing['property_sqft']}")
-                                st.write(f"**Type:** {listing['property_type']}")
-                                st.write(f"**Contact Name:** {listing['contact_name']}")
-                                st.write(f"**Contact Email:** {listing['contact_email']}")
-                                st.write(f"**Contact Phone:** {listing['contact_phone']}")
+                        with col_price:
+                            st.markdown(f"### **${listing['price']:,}**")
+
+                        st.markdown(
+                            f"##### **Address:** {listing['address']}, {listing['city']}, {listing['state']}"
+                        )
+                        st.markdown(f"##### **Status:** {listing['status']}")
+
+                        if st.button(
+                            "View Listing Details",
+                            key=f"view_other_listing_btn_{listing['id']}",
+                            type="primary",
+                            use_container_width=True
+                        ):
+                            st.session_state["selected_other_listing_id"] = listing["id"]
+                            st.session_state["page"] = "view_other_listing_details"
+                            st.rerun()
+
+    # -- Manage Listings Page --
+    elif st.session_state["page"] == "manage_listing":
+        selected_listing = None
+
+        for property_item in properties:
+            if property_item["id"] == st.session_state["selected_agent_listing_id"]:
+                selected_listing = property_item
+                break
+
+        if selected_listing is None:
+            st.error("Listing not found.")
+        else:
+            st.markdown("## Manage Listing")
+            st.divider()
+
+            # Summary Section
+            with st.container(border=True):
+                col_left, col_right = st.columns([3, 1])
+
+                with col_left:
+                    st.markdown(f"### {selected_listing['title']}")
+                    st.markdown(
+                        f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
+                    )
+
+                with col_right:
+                    st.markdown(f"**Status:** {selected_listing['status']}")
+                    st.markdown(f"### ${selected_listing['price']:,}")
+
+            # Facts Section
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                with st.container(border=True):
+                    st.markdown("**Bedrooms**")
+                    st.markdown(f"### {selected_listing['bedrooms']}")
+
+            with col2:
+                with st.container(border=True):
+                    st.markdown("**Bathrooms**")
+                    st.markdown(f"### {selected_listing['bathrooms']}")
+
+            with col3:
+                with st.container(border=True):
+                    st.markdown("**Square Feet**")
+                    st.markdown(f"### {selected_listing['property_sqft']}")
+
+            with col4:
+                with st.container(border=True):
+                    st.markdown("**Property Type**")
+                    st.markdown(f"### {selected_listing['property_type']}")
+
+            # Description
+            with st.container(border=True):
+                st.markdown("### Description")
+                st.markdown(selected_listing["description"])
+
+            # Contact
+            with st.container(border=True):
+                st.markdown("### Contact Information")
+                st.markdown(f"**Name:** {selected_listing['contact_name']}")
+                st.markdown(f"**Email:** {selected_listing['contact_email']}")
+                st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
+
+            # Action buttons
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
+
+            with col_btn1:
+                if st.button(
+                    "Update Listing",
+                    key=f"edit_listing_{selected_listing['id']}",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    st.session_state["page"] = "edit_listing"
+                    st.rerun()
+
+            with col_btn2:
+                if st.button(
+                    "Delete Listing",
+                    key=f"delete_listing_{selected_listing['id']}",
+                    use_container_width=True
+                ):
+                    properties.remove(selected_listing)
+                    with json_file_properties.open("w", encoding="utf-8") as f:
+                        json.dump(properties, f, indent=4)
+
+                    st.success("Listing deleted successfully!")
+                    time.sleep(2)
+                    st.session_state["selected_agent_listing_id"] = None
+                    st.session_state["page"] = "properties_listings"
+                    st.rerun()
+
+            with col_btn3:
+                if st.button(
+                    "Back to My Listings",
+                    key="back_to_my_listings",
+                    use_container_width=True
+                ):
+                    st.session_state["page"] = "properties_listings"
+                    st.rerun()
+
+    # -- Edit Listing Page -- 
+    elif st.session_state["page"] == "edit_listing":
+        selected_listing = None
+
+        for property_item in properties:
+            if property_item["id"] == st.session_state["selected_agent_listing_id"]:
+                selected_listing = property_item
+                break
+
+        if selected_listing is None:
+            st.error("Listing not found.")
+        else:
+            st.markdown("## Update Listing")
+            st.divider()
+
+            title = st.text_input("Listing Title", value=selected_listing["title"])
+            description = st.text_area("Description", value=selected_listing["description"])
+
+            contact_name = st.text_input("Contact Name", value=selected_listing["contact_name"])
+            contact_email = st.text_input("Contact Email", value=selected_listing["contact_email"])
+            contact_phone = st.text_input("Contact Phone Number", value=selected_listing["contact_phone"])
+
+            address = st.text_input("Street Address", value=selected_listing["address"])
+            city = st.text_input("City", value=selected_listing["city"])
+            state = st.text_input("State", value=selected_listing["state"])
+            price = st.number_input("Price", min_value=1, value=int(selected_listing["price"]))
+            bedrooms = st.number_input("Bedrooms", min_value=0, step=1, value=int(selected_listing["bedrooms"]))
+            bathrooms = st.number_input("Bathrooms", min_value=0, step=1, value=int(selected_listing["bathrooms"]))
+            property_sqft = st.number_input("Property Square Footage", min_value=1, step=1, value=int(selected_listing["property_sqft"]))
+
+            property_type = st.selectbox(
+                "Property Type",
+                ["House", "Apartment", "Condo", "Townhouse"],
+                index=["House", "Apartment", "Condo", "Townhouse"].index(selected_listing["property_type"])
+            )
+
+            status = st.selectbox(
+                "Status",
+                ["Available", "Pending", "Sold"],
+                index=["Available", "Pending", "Sold"].index(selected_listing["status"])
+            )
+
+            col_save, col_cancel = st.columns(2)
+
+            with col_save:
+                if st.button(
+                    "Save Changes",
+                    key=f"save_listing_{selected_listing['id']}",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    title = title.strip()
+                    description = description.strip()
+                    contact_name = contact_name.strip()
+                    contact_email = contact_email.strip().lower()
+                    contact_phone = contact_phone.strip()
+                    address = address.strip()
+                    city = city.strip()
+                    state = state.strip()
+
+                    if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
+                        st.error("Please fill in all required fields.")
+                        st.stop()
+
+                    if not contact_phone.isdigit() or len(contact_phone) != 10:
+                        st.error("Enter a valid 10-digit phone number.")
+                        st.stop()
+
+                    if "@" not in contact_email or "." not in contact_email:
+                        st.error("Enter a valid email address.")
+                        st.stop()
+
+                    selected_listing["title"] = title
+                    selected_listing["description"] = description
+                    selected_listing["contact_name"] = contact_name
+                    selected_listing["contact_email"] = contact_email
+                    selected_listing["contact_phone"] = contact_phone
+                    selected_listing["address"] = address
+                    selected_listing["city"] = city
+                    selected_listing["state"] = state
+                    selected_listing["price"] = price
+                    selected_listing["bedrooms"] = bedrooms
+                    selected_listing["bathrooms"] = bathrooms
+                    selected_listing["property_sqft"] = property_sqft
+                    selected_listing["property_type"] = property_type
+                    selected_listing["status"] = status
+
+                    with json_file_properties.open("w", encoding="utf-8") as f:
+                        json.dump(properties, f, indent=4)
+
+                    st.success("Listing updated successfully!")
+                    time.sleep(2)
+                    st.session_state["page"] = "manage_listing"
+                    st.rerun()
+
+            with col_cancel:
+                if st.button(
+                    "Cancel",
+                    key=f"cancel_edit_listing_{selected_listing['id']}",
+                    use_container_width=True
+                ):
+                    st.session_state["page"] = "manage_listing"
+                    st.rerun()
+    
+    # -- View Other Agents Listings
+    elif st.session_state["page"] == "view_other_listing_details":
+        selected_listing = None
+
+        for property_item in properties:
+            if property_item["id"] == st.session_state["selected_other_listing_id"]:
+                selected_listing = property_item
+                break
+
+        if selected_listing is None:
+            st.error("Listing not found.")
+        else:
+            st.markdown("## View Listing Details")
+            st.divider()
+
+            # Summary Section
+            with st.container(border=True):
+                col_left, col_right = st.columns([3, 1])
+
+                with col_left:
+                    st.markdown(f"### {selected_listing['title']}")
+                    st.markdown(
+                        f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
+                    )
+
+                with col_right:
+                    st.markdown(f"**Status:** {selected_listing['status']}")
+                    st.markdown(f"### ${selected_listing['price']:,}")
+
+            # Facts Section
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                with st.container(border=True):
+                    st.markdown("**Bedrooms**")
+                    st.markdown(f"### {selected_listing['bedrooms']}")
+
+            with col2:
+                with st.container(border=True):
+                    st.markdown("**Bathrooms**")
+                    st.markdown(f"### {selected_listing['bathrooms']}")
+
+            with col3:
+                with st.container(border=True):
+                    st.markdown("**Square Feet**")
+                    st.markdown(f"### {selected_listing['property_sqft']}")
+
+            with col4:
+                with st.container(border=True):
+                    st.markdown("**Property Type**")
+                    st.markdown(f"### {selected_listing['property_type']}")
+
+            # Description
+            with st.container(border=True):
+                st.markdown("### Description")
+                st.markdown(selected_listing["description"])
+
+            # Contact Info
+            with st.container(border=True):
+                st.markdown("### Contact Information")
+                st.markdown(f"**Name:** {selected_listing['contact_name']}")
+                st.markdown(f"**Email:** {selected_listing['contact_email']}")
+                st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
+
+            if st.button(
+                "Back to Other Listings",
+                key="back_to_other_agent_listings",
+                use_container_width=True
+            ):
+                st.session_state["page"] = "properties_listings"
+                st.session_state["selected_other_listing_id"] = None
+                st.rerun()
 
     # -- Add Listings Page --
     elif st.session_state["page"] == "add_listings":
-        st.markdown(f"## Add Listings")
-        with st.container(border = True):
-            st.markdown("#### Listing Details")
-            title = st.text_input("Listing Title", placeholder = "ex... 5 Bedroom Perfect for a family")
-            description = st.text_area("Description", placeholder = "brief description")
-        
-        with st.container(border = True):
-            st.markdown("#### Contact Information")
-                
-            contact_name = st.text_input("Contact Name", placeholder = "John Doe")
-            contact_email = st.text_input("Contact Email", placeholder = "123abc@gmail.com")
-            contact_phone = st.text_input("Contact Phone Number")
+        st.markdown("# Add New Listing")
+        st.caption("Create a new property listing for buyers to view, book, and inquire about.")
+        st.divider()
 
-        with st.container(border = True):
-            st.markdown("#### Housing Information")
-                
-            address = st.text_input("Street Address", placeholder = "Enter street address here")
-            city = st.text_input("City", placeholder = "Enter City")
-            state = st.text_input("State", placeholder = "Enter State")
-            price = st.number_input("Price", min_value=1)
-            bedrooms = st.number_input("Bedrooms", min_value=0, step=1)
-            bathrooms = st.number_input("Bathrooms", min_value=0, step=1)
-            property_sqft = st.number_input("Property Square Footage", min_value=1, step=1)
-            property_type = st.selectbox("Property Type", ["House", "Apartment", "Condo", "Townhouse"])
-            status = st.selectbox("Status", ["Available", "Pending", "Sold"])
+        # Listing Overview
+        with st.container(border=True):
+            st.markdown("### Listing Overview")
+            title = st.text_input(
+                "Listing Title",
+                placeholder="Ex: Modern 4 Bedroom Family Home"
+            )
+            description = st.text_area(
+                "Description",
+                placeholder="Write a short description of the property"
+            )
 
-        btn_add_listing = st.button("Add Listing", type="primary", use_container_width=True)
+        # Property Details
+        with st.container(border=True):
+            st.markdown("### Property Details")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                property_type = st.selectbox(
+                    "Property Type",
+                    ["House", "Apartment", "Condo", "Townhouse"]
+                )
+                price = st.number_input("Price", min_value=1)
+                bedrooms = st.number_input("Bedrooms", min_value=0, step=1)
+
+            with col2:
+                status = st.selectbox(
+                    "Status",
+                    ["Available", "Pending", "Sold"]
+                )
+                bathrooms = st.number_input("Bathrooms", min_value=0, step=1)
+                property_sqft = st.number_input("Property Square Footage", min_value=1, step=1)
+
+        # Location
+        with st.container(border=True):
+            st.markdown("### Property Location")
+
+            address = st.text_input(
+                "Street Address",
+                placeholder="Enter street address"
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                city = st.text_input("City", placeholder="Enter city")
+            with col2:
+                state = st.text_input("State", placeholder="Enter state")
+
+        # Contact Information
+        with st.container(border=True):
+            st.markdown("### Contact Information")
+
+            contact_name = st.text_input(
+                "Contact Name",
+                placeholder="John Doe"
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                contact_email = st.text_input(
+                    "Contact Email",
+                    placeholder="name@email.com"
+                )
+            with col2:
+                contact_phone = st.text_input(
+                    "Contact Phone Number",
+                    placeholder="3025551234"
+                )
+
+        # Action buttons
+        col_btn1, col_btn2 = st.columns(2)
+
+        with col_btn1:
+            btn_add_listing = st.button(
+                "Add Listing",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col_btn2:
+            btn_cancel_listing = st.button(
+                "Cancel",
+                use_container_width=True
+            )
+
+        if btn_cancel_listing:
+            st.session_state["page"] = "properties_listings"
+            st.rerun()
 
         if btn_add_listing:
-            with st.spinner("Listing is being created ..."):
-                time.sleep(3)
-            
+            with st.spinner("Listing is being created..."):
+                time.sleep(2)
+
                 title = title.strip()
                 description = description.strip()
                 contact_name = contact_name.strip()
@@ -339,18 +713,18 @@ def show_main_app_agent():
                 state = state.strip()
                 contact_phone = contact_phone.strip()
 
-            if not title or not address or not city or not state or price == 0 or not contact_name or not contact_email or not contact_phone:
+            if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
                 st.error("Please fill in all required fields.")
                 st.stop()
 
             if not contact_phone.isdigit() or len(contact_phone) != 10:
                 st.error("Enter a valid 10-digit phone number.")
                 st.stop()
-            
+
             if "@" not in contact_email or "." not in contact_email:
                 st.error("Enter a valid email address.")
                 st.stop()
-            
+
             duplicate_listing = None
             for listing in properties:
                 if (
@@ -388,13 +762,12 @@ def show_main_app_agent():
             properties.append(new_listing)
 
             with json_file_properties.open("w", encoding="utf-8") as f:
-                json.dump(properties, f, indent = 4)
+                json.dump(properties, f, indent=4)
 
-            
             st.success("Listing added successfully!")
             st.balloons()
             time.sleep(2)
-            # st.session_state["page"] = "properties_listings"
+            st.session_state["page"] = "properties_listings"
             st.rerun()
 
     elif st.session_state["page"] == "buyer_inquiries":
@@ -409,7 +782,7 @@ def show_main_app_agent():
             st.session_state["page"] = "home"
             st.rerun()
 
-        if st.button("View Property Listings", key = "properties_listings", type = "primary", use_container_width = True):
+        if st.button("View/Manage Property Listings", key = "properties_listings", type = "primary", use_container_width = True):
             st.session_state["page"] = "properties_listings"
             st.rerun()
         
@@ -417,7 +790,7 @@ def show_main_app_agent():
             st.session_state["page"] = "add_listings"
             st.rerun()
         
-        if st.button("Buyer Inquiries", key = "buyer_inquiries", type = "primary", use_container_width = True):
+        if st.button("Buyer Bookings & Inquiries", key = "buyer_inquiries", type = "primary", use_container_width = True):
             st.session_state["page"] = "buyer_inquiries"
             st.rerun()
         
@@ -428,6 +801,8 @@ def show_main_app_agent():
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
+            st.session_state["selected_agent_listing_id"] = None
+            st.session_state["selected_other_listing_id"] = None
             st.rerun()
 
 
@@ -436,6 +811,7 @@ def show_main_app_buyer():
     # -- Dashboard Page --
     if st.session_state["page"] == "home":
         st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
+    
     # -- Browse Listings Page --
     elif st.session_state["page"] == "browse_listings":
         st.markdown("# View Property Listings")
@@ -495,6 +871,7 @@ def show_main_app_buyer():
                         st.session_state["selected_listing_id"] = listing["id"]
                         st.session_state["page"] = "view_listing_details"
                         st.rerun()
+
     # -- Shows listing Details when a user clicks the listing -- 
     elif st.session_state["page"] == "view_listing_details":
         selected_listing = None
@@ -830,13 +1207,276 @@ def show_main_app_buyer():
                         time.sleep(2)
                         st.session_state["question_listing_id"] = None
                         st.rerun()
+    
     # -- Booking & Inquiries Page --
     elif st.session_state["page"] == "my_inquiries":
-            st.markdown("# My Bookings & Inquiries ")
+        st.markdown("# My Bookings & Inquiries")
+        st.divider()
+
+        tab_bookings, tab_inquiries = st.tabs(["My Bookings", "My Inquiries"])
+
+        # -- Booking Tab --
+        with tab_bookings:
+            my_bookings = []
+            for booking in bookings:
+                if booking["buyer_id"] == st.session_state["user"]["id"]:
+                    my_bookings.append(booking)
+
+            st.markdown(f"### My Bookings")
+            st.markdown(f"**Total Bookings:** {len(my_bookings)}")
             st.divider()
 
-    
-    
+            if not my_bookings:
+                st.info("You have not made any bookings yet.")
+            else:
+                for booking in my_bookings:
+                    with st.container(border=True):
+                        col_left, col_right = st.columns([3, 1])
+
+                        with col_left:
+                            st.markdown(f"### {booking['property_title']}")
+                            st.markdown(f"**Appointment Type:** {booking['appointment_type']}")
+                            st.markdown(f"**Date:** {booking['appointment_date']}")
+                            st.markdown(f"**Time:** {booking['appointment_time']}")
+
+                        with col_right:
+                            st.markdown(f"### {booking['status']}")
+
+                        if booking["message"]:
+                            st.markdown(f"**Notes:** {booking['message']}")
+                        else:
+                            st.markdown("**Notes:** No additional notes provided.")
+
+                        st.divider()
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            if st.button(
+                                "Update Booking",
+                                key=f"edit_booking_{booking['id']}",
+                                use_container_width=True
+                            ):
+                                st.session_state["edit_booking_id"] = booking["id"]
+                                st.rerun()
+
+                        with col2:
+                            if st.button(
+                                "Delete Booking",
+                                key=f"delete_booking_{booking['id']}",
+                                use_container_width=True
+                            ):
+                                bookings.remove(booking)
+                                with json_file_bookings.open("w", encoding="utf-8") as f:
+                                    json.dump(bookings, f, indent=4)
+                                st.success("Booking deleted successfully!")
+                                st.rerun()
+
+                        if st.session_state["edit_booking_id"] == booking["id"]:
+                            with st.container(border=True):
+                                st.markdown("### Update Booking")
+
+                                updated_type = st.selectbox(
+                                    "Appointment Type",
+                                    [
+                                        "Property Walkthrough",
+                                        "Initial Consultation",
+                                        "Offer Discussion"
+                                    ],
+                                    index=[
+                                        "Property Walkthrough",
+                                        "Initial Consultation",
+                                        "Offer Discussion"
+                                    ].index(booking["appointment_type"]) if booking["appointment_type"] in [
+                                        "Property Walkthrough",
+                                        "Initial Consultation",
+                                        "Offer Discussion"
+                                    ] else 0,
+                                    key=f"updated_type_{booking['id']}"
+                                )
+
+                                updated_date = st.date_input(
+                                    "Preferred Appointment Date",
+                                    value=datetime.strptime(booking["appointment_date"], "%Y-%m-%d").date(),
+                                    key=f"updated_date_{booking['id']}"
+                                )
+
+                                updated_time = st.time_input(
+                                    "Preferred Appointment Time",
+                                    value=datetime.strptime(booking["appointment_time"], "%H:%M:%S").time(),
+                                    key=f"updated_time_{booking['id']}"
+                                )
+
+                                st.markdown(
+                                    f"**Selected Time:** {updated_time.strftime('%I:%M %p')}"
+                                )
+                                st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+
+                                updated_message = st.text_area(
+                                    "Notes",
+                                    value=booking["message"],
+                                    key=f"updated_message_{booking['id']}"
+                                )
+
+                                col_save, col_cancel = st.columns(2)
+
+                                with col_save:
+                                    if st.button(
+                                        "Save Changes",
+                                        key=f"save_booking_{booking['id']}",
+                                        type="primary",
+                                        use_container_width=True
+                                    ):
+                                        if updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
+                                            st.error("Appointments must be between 8:00 AM and 5:00 PM.")
+                                            st.stop()
+
+                                        booking["appointment_type"] = updated_type
+                                        booking["appointment_date"] = str(updated_date)
+                                        booking["appointment_time"] = str(updated_time)
+                                        booking["message"] = updated_message.strip()
+
+                                        with json_file_bookings.open("w", encoding="utf-8") as f:
+                                            json.dump(bookings, f, indent=4)
+
+                                        st.success("Booking updated successfully!")
+                                        st.session_state["edit_booking_id"] = None
+                                        st.rerun()
+
+                                with col_cancel:
+                                    if st.button(
+                                        "Cancel",
+                                        key=f"cancel_edit_booking_{booking['id']}",
+                                        use_container_width=True
+                                    ):
+                                        st.session_state["edit_booking_id"] = None
+                                        st.rerun()
+        # -- Inquiries Tab --
+        with tab_inquiries:
+            my_inquiries = []
+            for inquiry in inquiries:
+                if inquiry["buyer_id"] == st.session_state["user"]["id"]:
+                    my_inquiries.append(inquiry)
+
+            st.markdown("### My Inquiries")
+            st.markdown(f"**Total Inquiries:** {len(my_inquiries)}")
+            st.divider()
+
+            if not my_inquiries:
+                st.info("You have not submitted any inquiries yet.")
+            else:
+                for inquiry in my_inquiries:
+                    with st.container(border=True):
+                        col_left, col_right = st.columns([3, 1])
+
+                        with col_left:
+                            st.markdown(f"### {inquiry['property_title']}")
+                            st.markdown(f"**Subject:** {inquiry['subject']}")
+                            st.markdown(f"**Question:** {inquiry['message']}")
+
+                        with col_right:
+                            st.markdown(f"### {inquiry['status']}")
+
+                        st.markdown(f"**Submitted:** {inquiry['created_at']}")
+                        st.divider()
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            if st.button(
+                                "Update Inquiry",
+                                key=f"edit_inquiry_{inquiry['id']}",
+                                use_container_width=True
+                            ):
+                                st.session_state["edit_inquiry_id"] = inquiry["id"]
+                                st.rerun()
+
+                        with col2:
+                            if st.button(
+                                "Delete Inquiry",
+                                key=f"delete_inquiry_{inquiry['id']}",
+                                use_container_width=True
+                            ):
+                                inquiries.remove(inquiry)
+                                with json_file_inquiries.open("w", encoding="utf-8") as f:
+                                    json.dump(inquiries, f, indent=4)
+                                st.success("Inquiry deleted successfully!")
+                                time.sleep(2)
+                                st.rerun()
+
+                        if st.session_state["edit_inquiry_id"] == inquiry["id"]:
+                            with st.container(border=True):
+                                st.markdown("### Update Inquiry")
+
+                                updated_subject = st.selectbox(
+                                    "Subject",
+                                    [
+                                        "Property Availability",
+                                        "Schedule a Tour",
+                                        "Pricing Information",
+                                        "Financing Questions",
+                                        "Property Details",
+                                        "Make an Offer",
+                                        "Other"
+                                    ],
+                                    index=[
+                                        "Property Availability",
+                                        "Schedule a Tour",
+                                        "Pricing Information",
+                                        "Financing Questions",
+                                        "Property Details",
+                                        "Make an Offer",
+                                        "Other"
+                                    ].index(inquiry["subject"]) if inquiry["subject"] in [
+                                        "Property Availability",
+                                        "Schedule a Tour",
+                                        "Pricing Information",
+                                        "Financing Questions",
+                                        "Property Details",
+                                        "Make an Offer",
+                                        "Other"
+                                    ] else 0,
+                                    key=f"updated_subject_{inquiry['id']}"
+                                )
+
+                                updated_question = st.text_area(
+                                    "Question",
+                                    value=inquiry["message"],
+                                    key=f"updated_question_{inquiry['id']}"
+                                )
+
+                                col_save, col_cancel = st.columns(2)
+
+                                with col_save:
+                                    if st.button(
+                                        "Save Changes",
+                                        key=f"save_inquiry_{inquiry['id']}",
+                                        type="primary",
+                                        use_container_width=True
+                                    ):
+                                        if not updated_question.strip():
+                                            st.error("Question cannot be empty.")
+                                            st.stop()
+
+                                        inquiry["subject"] = updated_subject
+                                        inquiry["message"] = updated_question.strip()
+
+                                        with json_file_inquiries.open("w", encoding="utf-8") as f:
+                                            json.dump(inquiries, f, indent=4)
+
+                                        st.success("Inquiry updated successfully!")
+                                        time.sleep(2)
+                                        st.session_state["edit_inquiry_id"] = None
+                                        st.rerun()
+
+                                with col_cancel:
+                                    if st.button(
+                                        "Cancel",
+                                        key=f"cancel_edit_inquiry_{inquiry['id']}",
+                                        use_container_width=True
+                                    ):
+                                        st.session_state["edit_inquiry_id"] = None
+                                        st.rerun()
                     
     # -- Sidebar for navigating pages and logging out for buyer -- 
     with st.sidebar:
@@ -853,6 +1493,7 @@ def show_main_app_buyer():
             st.rerun()
         
         st.write(f"Logged in as: {st.session_state['user']['email']}")
+        st.write(f"Role: {st.session_state['user']['role']}")
 
         if st.button("Log Out", type="primary", use_container_width=True):
             st.session_state["logged_in"] = False
