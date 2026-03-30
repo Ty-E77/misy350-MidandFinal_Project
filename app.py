@@ -8,11 +8,7 @@ import uuid
 import time
 
 # -- Setting page configuration --
-st.set_page_config(page_title = "Real Estate Finder", 
-                   page_icon = "",
-                   layout = "centered",
-                   initial_sidebar_state = "collapsed")
-
+st.set_page_config(page_title = "Real Estate Finder", page_icon = "", layout = "centered", initial_sidebar_state = "collapsed")
 
 # -- Loading all json files -- 
 json_file_properties = Path("properties.json")
@@ -199,8 +195,116 @@ def show_login_page():
 def show_main_app_agent():
     # -- Dashboard Page --
     if st.session_state["page"] == "home":
-        st.markdown(f"# Agent Dashboard - {st.session_state['user']['full_name']}")
+        st.markdown(f"## Agent Dashboard - {st.session_state['user']['full_name']}")
+        st.caption("Manage listings, review buyer bookings, and respond to inquiries.")
         st.divider()
+
+        # Calculate stats
+        my_listings_count = 0
+        available_listings_count = 0
+        pending_bookings_count = 0
+        new_inquiries_count = 0
+
+        agent_listings = []
+        agent_bookings = []
+        agent_inquiries = []
+
+        for listing in properties:
+            if listing["agent_id"] == st.session_state["user"]["id"]:
+                agent_listings.append(listing)
+                my_listings_count += 1
+                if listing["status"] == "Available":
+                    available_listings_count += 1
+
+        for booking in bookings:
+            if booking["agent_id"] == st.session_state["user"]["id"]:
+                agent_bookings.append(booking)
+                if booking["status"] == "Pending":
+                    pending_bookings_count += 1
+
+        for inquiry in inquiries:
+            if inquiry["agent_id"] == st.session_state["user"]["id"]:
+                agent_inquiries.append(inquiry)
+                if inquiry["status"] == "New":
+                    new_inquiries_count += 1
+
+        # Stat cards
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            with st.container(border=True):
+                st.markdown("**My Listings**")
+                st.markdown(f"### {my_listings_count}")
+
+        with col2:
+            with st.container(border=True):
+                st.markdown("**Available Listings**")
+                st.markdown(f"### {available_listings_count}")
+
+        with col3:
+            with st.container(border=True):
+                st.markdown("**Pending Bookings**")
+                st.markdown(f"### {pending_bookings_count}")
+
+        with col4:
+            with st.container(border=True):
+                st.markdown("**New Inquiries**")
+                st.markdown(f"### {new_inquiries_count}")
+
+        st.divider()
+
+        # Quick actions
+        st.markdown("### Quick Actions")
+
+        col_a, col_b, col_c = st.columns(3)
+
+        with col_a:
+            if st.button("View My Listings", type="primary", use_container_width=True):
+                st.session_state["page"] = "properties_listings"
+                st.rerun()
+
+        with col_b:
+            if st.button("Add New Listing", use_container_width=True):
+                st.session_state["page"] = "add_listings"
+                st.rerun()
+
+        with col_c:
+            if st.button("View Buyer Requests", use_container_width=True):
+                st.session_state["page"] = "buyer_inquiries"
+                st.rerun()
+
+        st.divider()
+
+        # Recent activity
+        st.markdown("### Recent Activity")
+
+        latest_listing = agent_listings[-1] if agent_listings else None
+        latest_booking = agent_bookings[-1] if agent_bookings else None
+        latest_inquiry = agent_inquiries[-1] if agent_inquiries else None
+
+        if latest_listing:
+            with st.container(border=True):
+                st.markdown("**Latest Listing**")
+                st.markdown(f"**Title:** {latest_listing['title']}")
+                st.markdown(f"**Status:** {latest_listing['status']}")
+                st.markdown(f"**Price:** ${latest_listing['price']:,}")
+
+        if latest_booking:
+            with st.container(border=True):
+                st.markdown("**Latest Booking Request**")
+                st.markdown(f"**Property:** {latest_booking['property_title']}")
+                st.markdown(f"**Buyer:** {latest_booking['buyer_name']}")
+                st.markdown(f"**Status:** {latest_booking['status']}")
+
+        if latest_inquiry:
+            with st.container(border=True):
+                st.markdown("**Latest Inquiry**")
+                st.markdown(f"**Property:** {latest_inquiry['property_title']}")
+                st.markdown(f"**Buyer:** {latest_inquiry['buyer_name']}")
+                st.markdown(f"**Status:** {latest_inquiry['status']}")
+
+        if not latest_listing and not latest_booking and not latest_inquiry:
+            st.info("No recent activity yet. Start by adding your first listing.")
 
     # -- Properties Page --
     elif st.session_state["page"] == "properties_listings":
@@ -976,6 +1080,102 @@ def show_main_app_buyer():
     # -- Dashboard Page --
     if st.session_state["page"] == "home":
         st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
+        st.caption("Browse listings, book appointments, and manage your inquiries.")
+        st.divider()
+
+        # Calculate stats
+        available_listings = 0
+        my_bookings = 0
+        my_inquiries = 0
+        pending_bookings = 0
+
+        for listing in properties:
+            if listing["status"] in ["Available", "Pending"]:
+                available_listings += 1
+
+        for booking in bookings:
+            if booking["buyer_id"] == st.session_state["user"]["id"]:
+                my_bookings += 1
+                if booking["status"] == "Pending":
+                    pending_bookings += 1
+
+        for inquiry in inquiries:
+            if inquiry["buyer_id"] == st.session_state["user"]["id"]:
+                my_inquiries += 1
+
+        # Stat cards
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            with st.container(border=True):
+                st.markdown("**Available Listings**")
+                st.markdown(f"### {available_listings}")
+
+        with col2:
+            with st.container(border=True):
+                st.markdown("**My Bookings**")
+                st.markdown(f"### {my_bookings}")
+
+        with col3:
+            with st.container(border=True):
+                st.markdown("**Pending Bookings**")
+                st.markdown(f"### {pending_bookings}")
+
+        with col4:
+            with st.container(border=True):
+                st.markdown("**My Inquiries**")
+                st.markdown(f"### {my_inquiries}")
+
+        st.divider()
+
+        # Quick actions
+        st.markdown("### Quick Actions")
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            if st.button("Browse Listings", type="primary", use_container_width=True):
+                st.session_state["page"] = "browse_listings"
+                st.rerun()
+
+        with col_b:
+            if st.button("View My Bookings & Inquiries", use_container_width=True):
+                st.session_state["page"] = "my_inquiries"
+                st.rerun()
+
+        st.divider()
+
+        # Recent activity
+        st.markdown("### Recent Activity")
+
+        latest_booking = None
+        latest_inquiry = None
+
+        buyer_bookings = [b for b in bookings if b["buyer_id"] == st.session_state["user"]["id"]]
+        buyer_inquiries = [i for i in inquiries if i["buyer_id"] == st.session_state["user"]["id"]]
+
+        if buyer_bookings:
+            latest_booking = buyer_bookings[-1]
+
+        if buyer_inquiries:
+            latest_inquiry = buyer_inquiries[-1]
+
+        if latest_booking:
+            with st.container(border=True):
+                st.markdown("**Latest Booking**")
+                st.markdown(f"Property: {latest_booking['property_title']}")
+                st.markdown(f"Status: {latest_booking['status']}")
+                st.markdown(f"Date: {latest_booking['appointment_date']}")
+
+        if latest_inquiry:
+            with st.container(border=True):
+                st.markdown("**Latest Inquiry**")
+                st.markdown(f"Property: {latest_inquiry['property_title']}")
+                st.markdown(f"Status: {latest_inquiry['status']}")
+                st.markdown(f"Subject: {latest_inquiry['subject']}")
+
+        if not latest_booking and not latest_inquiry:
+            st.info("No recent activity yet. Start by browsing available listings.")
     
     # -- Browse Listings Page --
     elif st.session_state["page"] == "browse_listings":
@@ -1655,30 +1855,30 @@ def show_main_app_buyer():
                                         st.session_state["edit_inquiry_id"] = None
                                         st.rerun()
                             
-            # -- Sidebar for navigating pages and logging out for buyer -- 
-            with st.sidebar:
-                if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
-                    st.session_state["page"] = "home"
-                    st.rerun()
+    # -- Sidebar for navigating pages and logging out for buyer -- 
+    with st.sidebar:
+        if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
+            st.session_state["page"] = "home"
+            st.rerun()
 
-                if st.button("Browse Listings", key = "browse_listings", type = "primary", use_container_width = True):
-                    st.session_state["page"] = "browse_listings"
-                    st.rerun()
+        if st.button("Browse Listings", key = "browse_listings", type = "primary", use_container_width = True):
+            st.session_state["page"] = "browse_listings"
+            st.rerun()
                 
-                if st.button("My Bookings & Inquiries", key = "my_inquiries", type = "primary", use_container_width = True):
-                    st.session_state["page"] = "my_inquiries"
-                    st.rerun()
+        if st.button("My Bookings & Inquiries", key = "my_inquiries", type = "primary", use_container_width = True):
+            st.session_state["page"] = "my_inquiries"
+            st.rerun()
                 
-                st.write(f"Logged in as: {st.session_state['user']['email']}")
-                st.write(f"Role: {st.session_state['user']['role']}")
+        st.write(f"Logged in as: {st.session_state['user']['email']}")
+        st.write(f"Role: {st.session_state['user']['role']}")
 
-                if st.button("Log Out", type="primary", use_container_width=True):
-                    st.session_state["logged_in"] = False
-                    st.session_state["user"] = None
-                    st.session_state["page"] = "home"
-                    st.session_state["booking_listing_id"] = None
-                    st.session_state["selected_listing_id"] = None
-                    st.rerun()
+        if st.button("Log Out", type="primary", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.session_state["user"] = None
+            st.session_state["page"] = "home"
+            st.session_state["booking_listing_id"] = None
+            st.session_state["selected_listing_id"] = None
+            st.rerun()
 
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
