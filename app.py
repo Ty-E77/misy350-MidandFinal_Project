@@ -436,7 +436,7 @@ def show_main_app_buyer():
     # -- Dashboard Page --
     if st.session_state["page"] == "home":
         st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
-
+    # -- Browse Listings Page --
     elif st.session_state["page"] == "browse_listings":
         st.markdown("# View Property Listings")
         st.divider()
@@ -495,7 +495,7 @@ def show_main_app_buyer():
                         st.session_state["selected_listing_id"] = listing["id"]
                         st.session_state["page"] = "view_listing_details"
                         st.rerun()
-
+    # -- Shows listing Details when a user clicks the listing -- 
     elif st.session_state["page"] == "view_listing_details":
         selected_listing = None
 
@@ -830,7 +830,7 @@ def show_main_app_buyer():
                         time.sleep(2)
                         st.session_state["question_listing_id"] = None
                         st.rerun()
-    
+    # -- Booking & Inquiries Page --
     elif st.session_state["page"] == "my_inquiries":
             st.markdown("# My Bookings & Inquiries ")
             st.divider()
@@ -862,7 +862,7 @@ def show_main_app_buyer():
             st.session_state["selected_listing_id"] = None
             st.rerun()
 
-# -- runs the main page best on user role and if not logged in displays login/registration page -- 
+# -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
     st.session_state["logged_in"]
     and st.session_state["user"] is not None
