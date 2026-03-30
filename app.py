@@ -2,7 +2,7 @@
 import streamlit as st
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import uuid
 import time
 
@@ -50,6 +50,12 @@ if "user" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state["page"] = "home"
 
+if "booking_listing_id" not in st.session_state:
+    st.session_state["booking_listing_id"] = None
+
+if "selected_listing_id" not in st.session_state:
+    st.session_state["selected_listing_id"] = None
+
 # -- Creating registration & login page -- 
 def show_login_page():
     tab1, tab2 = st.tabs(["Register", "Login"])
@@ -93,7 +99,7 @@ def show_login_page():
 
         })
                 with json_file_users.open("w", encoding = "utf-8") as f:
-                            json.dump(users, f, indent = 6)
+                            json.dump(users, f, indent = 4)
 
                 st.success("Account created successfully!")
     with tab2:
@@ -279,6 +285,16 @@ def show_main_app_agent():
         if btn_add_listing:
             with st.spinner("Listing is being created ..."):
                 time.sleep(3)
+            
+                title = title.strip()
+                description = description.strip()
+                contact_name = contact_name.strip()
+                contact_email = contact_email.strip().lower()
+                address = address.strip()
+                city = city.strip()
+                state = state.strip()
+                contact_phone = contact_phone.strip()
+
             if not title or not address or not city or not state or price == 0 or not contact_name or not contact_email or not contact_phone:
                 st.error("Please fill in all required fields.")
                 st.stop()
@@ -304,15 +320,6 @@ def show_main_app_agent():
             if duplicate_listing:
                 st.error("A listing with this title and address already exists.")
                 st.stop()
-
-                title = title.strip()
-                description = description.strip()
-                contact_name = contact_name.strip()
-                contact_email = contact_email.strip().lower()
-                address = address.strip()
-                city = city.strip()
-                state = state.strip()
-                contact_phone = contact_phone.strip()
 
             new_listing = {
                 "id": str(uuid.uuid4()),
@@ -382,11 +389,244 @@ def show_main_app_agent():
 
 # -- Defining application for buyer -- 
 def show_main_app_buyer():
-    st.markdown("Buyer Dashboard")
+    # -- Dashboard Page --
+    if st.session_state["page"] == "home":
+        st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
 
+    elif st.session_state["page"] == "browse_listings":
+        st.markdown("## View Property Listings")
+
+        with st.container(border=True):
+            st.markdown("###### Filter Listings")
+
+            selected_type = st.selectbox(
+                "Property Type",
+                ["All", "House", "Apartment", "Condo", "Townhouse"],
+                key="buyer_type_filter"
+            )
+
+            selected_status = st.selectbox(
+                "Status",
+                ["All", "Available", "Pending"],
+                key="buyer_status_filter"
+            )
+
+        # Build filtered list first
+        filtered_properties = []
+        for listing in properties:
+            if listing["status"] == "Sold":
+                continue
+
+            type_match = selected_type == "All" or listing["property_type"] == selected_type
+            status_match = selected_status == "All" or listing["status"] == selected_status
+
+            if type_match and status_match:
+                filtered_properties.append(listing)
+
+        st.markdown(f"#### Total Available Listings: {len(filtered_properties)}")
+
+        # Render once, after filtering is complete
+        if not filtered_properties:
+            st.info("No listings match your filters.")
+        else:
+            for listing in filtered_properties:
+                with st.container(border=True):
+                    st.markdown(f"### {listing['title']}")
+                    st.write(f"**Address:** {listing['address']}, {listing['city']}, {listing['state']}")
+                    st.write(f"**Price:** ${listing['price']:,}")
+                    st.write(f"**Status:** {listing['status']}")
+
+                    if st.button(
+                        "View Listing Details",
+                        key=f"view_listing_btn_{listing['id']}",
+                        type="primary",
+                        use_container_width=True
+                    ):
+                        st.session_state["selected_listing_id"] = listing["id"]
+                        st.session_state["page"] = "view_listing_details"
+                        st.rerun()
+    
+    elif st.session_state["page"] == "view_listing_details":
+        selected_listing = None
+
+        for property_item in properties:
+            if property_item["id"] == st.session_state["selected_listing_id"]:
+                selected_listing = property_item
+                break
+
+        if selected_listing is None:
+            st.error("Listing not found.")
+        else:
+            col1, col2 = st.columns([3,2])
+            with col1: 
+                st.markdown(f"## {selected_listing['title']}")
+            with col2: 
+                st.markdown(f"## ${selected_listing['price']:,}")
+            st.markdown(f"**Address:** {selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}")
+            
+            st.markdown(f"**Status:** {selected_listing['status']}")
+
+            with st.container(border=True):
+                st.markdown(f"**Bedrooms:** {selected_listing['bedrooms']}")
+                st.markdown(f"**Bathrooms:** {selected_listing['bathrooms']}")
+                st.markdown(f"**Square Footage:** {selected_listing['property_sqft']}")
+                st.markdown(f"**Type:** {selected_listing['property_type']}")
+                st.write(f"**Description:** {selected_listing['description']}")
+                st.write(f"**Contact Name:** {selected_listing['contact_name']}")
+                st.write(f"**Contact Email:** {selected_listing['contact_email']}")
+                st.write(f"**Contact Phone:** {selected_listing['contact_phone']}")
+
+            col_btn1, col_btn2 = st.columns(2)
+
+            with col_btn1:
+                if st.button(
+                    "Book an Appointment",
+                    key=f"details_book_{selected_listing['id']}",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    st.session_state["booking_listing_id"] = selected_listing["id"]
+                    st.rerun()
+
+            with col_btn2:
+                st.button(
+                    "Ask a Question(s)",
+                    key=f"details_question_{selected_listing['id']}",
+                    use_container_width=True
+                )
+
+            if st.button("Back to Listings", use_container_width=True):
+                st.session_state["page"] = "browse_listings"
+                st.session_state["booking_listing_id"] = None
+                st.rerun()
+
+            if st.session_state["booking_listing_id"] == selected_listing["id"]:
+                with st.container(border=True):
+                    st.markdown("### Book an Appointment")
+
+                    appointment_name = st.text_input(
+                        "Full Name",
+                        value=st.session_state["user"]["full_name"],
+                        key=f"appointment_name_{selected_listing['id']}"
+                    )
+
+                    appointment_email = st.text_input(
+                        "Email",
+                        value=st.session_state["user"]["email"],
+                        key=f"appointment_email_{selected_listing['id']}"
+                    )
+
+                    appointment_phone = st.text_input(
+                        "Phone Number",
+                        key=f"appointment_phone_{selected_listing['id']}"
+                    )
+
+                    appointment_type = st.selectbox(
+                        "Appointment Type",
+                        [
+                            "Select Type",
+                            "Property Walkthrough",
+                            "Initial Consultation",
+                            "Offer Discussion"
+                        ],
+                        key=f"appointment_type_{selected_listing['id']}"
+                    )
+
+                    appointment_date = st.date_input(
+                        "Preferred Appointment Date",
+                        key=f"appointment_date_{selected_listing['id']}"
+                    )
+
+                    appointment_time = st.time_input(
+                        "Preferred Appointment Time",
+                        key=f"appointment_time_{selected_listing['id']}"
+                    )
+                    st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+
+                    appointment_message = st.text_area(
+                        "Notes (Optional)",
+                        placeholder="Add any details or preferences here",
+                        key=f"appointment_message_{selected_listing['id']}"
+                    )
+
+                    col_submit, col_cancel = st.columns(2)
+
+                    with col_submit:
+                        btn_submit_appointment = st.button(
+                            "Submit Appointment",
+                            key=f"submit_appointment_{selected_listing['id']}",
+                            type="primary",
+                            use_container_width=True
+                        )
+
+                    with col_cancel:
+                        btn_cancel_appointment = st.button(
+                            "Cancel",
+                            key=f"cancel_appointment_{selected_listing['id']}",
+                            use_container_width=True
+                        )
+
+                    if btn_cancel_appointment:
+                        st.session_state["booking_listing_id"] = None
+                        st.rerun()
+
+                    if btn_submit_appointment:
+                        appointment_name = appointment_name.strip()
+                        appointment_email = appointment_email.strip().lower()
+                        appointment_phone = appointment_phone.strip()
+                        appointment_message = appointment_message.strip()
+
+                        if not appointment_name or not appointment_email or not appointment_phone:
+                            st.error("Please fill in all required fields.")
+                            st.stop()
+
+                        if not appointment_phone.isdigit() or len(appointment_phone) != 10:
+                            st.error("Enter a valid 10-digit phone number.")
+                            st.stop()
+
+                        if "@" not in appointment_email or "." not in appointment_email:
+                            st.error("Enter a valid email address.")
+                            st.stop()
+
+                        if appointment_type == "Select Type":
+                            st.error("Please select an appointment type.")
+                            st.stop()
+
+                        if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
+                            st.error("Appointments must be between 8:00 AM and 5:00 PM.")
+                            st.stop()
+
+                        with st.spinner("Submitting appointment..."):
+                            time.sleep(2)
+
+                            new_booking = {
+                                "id": str(uuid.uuid4()),
+                                "listing_id": selected_listing["id"],
+                                "property_title": selected_listing["title"],
+                                "agent_id": selected_listing["agent_id"],
+                                "buyer_id": st.session_state["user"]["id"],
+                                "buyer_name": appointment_name,
+                                "buyer_email": appointment_email,
+                                "buyer_phone": appointment_phone,
+                                "appointment_type": appointment_type,
+                                "appointment_date": str(appointment_date),
+                                "appointment_time": str(appointment_time),
+                                "message": appointment_message,
+                                "status": "Pending",
+                                "created_at": str(datetime.now())
+                            }
+
+                            bookings.append(new_booking)
+
+                            with json_file_bookings.open("w", encoding="utf-8") as f:
+                                json.dump(bookings, f, indent=4)
+
+                        st.success("Appointment submitted successfully!")
+                        st.session_state["booking_listing_id"] = None
+                        st.rerun()
     # -- Sidebar for navigating pages and logging out for buyer -- 
     with st.sidebar:
-        if st.button("Home", key = "home_btn", type = "primary", use_container_width = True):
+        if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
             st.session_state["page"] = "home"
             st.rerun()
 
@@ -404,6 +644,8 @@ def show_main_app_buyer():
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
+            st.session_state["booking_listing_id"] = None
+            st.session_state["selected_listing_id"] = None
             st.rerun()
 
 # -- runs the main page best on user role and if not logged in displays login/registration page -- 
