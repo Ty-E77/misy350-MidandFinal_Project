@@ -1,4 +1,5 @@
 # -- Importing necessary packages --
+# breadcrumb
 import streamlit as st
 import json
 from pathlib import Path
@@ -55,6 +56,9 @@ if "booking_listing_id" not in st.session_state:
 
 if "selected_listing_id" not in st.session_state:
     st.session_state["selected_listing_id"] = None
+
+if "question_listing_id" not in st.session_state:
+    st.session_state["question_listing_id"] = None
 
 # -- Creating registration & login page -- 
 def show_login_page():
@@ -394,7 +398,8 @@ def show_main_app_buyer():
         st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
 
     elif st.session_state["page"] == "browse_listings":
-        st.markdown("## View Property Listings")
+        st.markdown("# View Property Listings")
+        st.divider()
 
         with st.container(border=True):
             st.markdown("###### Filter Listings")
@@ -431,10 +436,15 @@ def show_main_app_buyer():
         else:
             for listing in filtered_properties:
                 with st.container(border=True):
-                    st.markdown(f"### {listing['title']}")
-                    st.write(f"**Address:** {listing['address']}, {listing['city']}, {listing['state']}")
-                    st.write(f"**Price:** ${listing['price']:,}")
-                    st.write(f"**Status:** {listing['status']}")
+                    cola, colspace, colp = st.columns([3,1,1])
+                    with cola:
+                        st.markdown(f"### {listing['title']}")
+                    with colp:
+                        st.markdown(f"### **${listing['price']:,}**")
+                    
+                    st.markdown(f"##### **Address:** {listing['address']}, {listing['city']}, {listing['state']}")
+                    
+                    st.markdown(f"##### **Status:** {listing['status']}")
 
                     if st.button(
                         "View Listing Details",
@@ -449,181 +459,337 @@ def show_main_app_buyer():
     elif st.session_state["page"] == "view_listing_details":
         selected_listing = None
 
-        for property_item in properties:
-            if property_item["id"] == st.session_state["selected_listing_id"]:
-                selected_listing = property_item
-                break
+    for property_item in properties:
+        if property_item["id"] == st.session_state["selected_listing_id"]:
+            selected_listing = property_item
+            break
 
-        if selected_listing is None:
-            st.error("Listing not found.")
-        else:
-            col1, col2 = st.columns([3,2])
-            with col1: 
-                st.markdown(f"## {selected_listing['title']}")
-            with col2: 
-                st.markdown(f"## ${selected_listing['price']:,}")
-            st.markdown(f"**Address:** {selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}")
-            
-            st.markdown(f"**Status:** {selected_listing['status']}")
+    if selected_listing is None:
+        st.error("Listing not found.")
+    else:
+        st.markdown("## View Listing Details")
+        st.divider()
 
-            with st.container(border=True):
-                st.markdown(f"**Bedrooms:** {selected_listing['bedrooms']}")
-                st.markdown(f"**Bathrooms:** {selected_listing['bathrooms']}")
-                st.markdown(f"**Square Footage:** {selected_listing['property_sqft']}")
-                st.markdown(f"**Type:** {selected_listing['property_type']}")
-                st.write(f"**Description:** {selected_listing['description']}")
-                st.write(f"**Contact Name:** {selected_listing['contact_name']}")
-                st.write(f"**Contact Email:** {selected_listing['contact_email']}")
-                st.write(f"**Contact Phone:** {selected_listing['contact_phone']}")
+        # -- Summary Section
+        with st.container(border=True):
+            col_left, col_right = st.columns([3, 1])
 
-            col_btn1, col_btn2 = st.columns(2)
-
-            with col_btn1:
-                if st.button(
-                    "Book an Appointment",
-                    key=f"details_book_{selected_listing['id']}",
-                    type="primary",
-                    use_container_width=True
-                ):
-                    st.session_state["booking_listing_id"] = selected_listing["id"]
-                    st.rerun()
-
-            with col_btn2:
-                st.button(
-                    "Ask a Question(s)",
-                    key=f"details_question_{selected_listing['id']}",
-                    use_container_width=True
+            with col_left:
+                st.markdown(f"### {selected_listing['title']}")
+                st.markdown(
+                    f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
                 )
 
+            with col_right:
+                st.markdown(f"**Status:** {selected_listing['status']}")
+                st.markdown(f"### ${selected_listing['price']:,}")
+
+        # -- Facts Section -- 
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            with st.container(border=True):
+                st.markdown("**Bedrooms**")
+                st.markdown(f"### {selected_listing['bedrooms']}")
+
+        with col2:
+            with st.container(border=True):
+                st.markdown("**Bathrooms**")
+                st.markdown(f"### {selected_listing['bathrooms']}")
+
+        with col3:
+            with st.container(border=True):
+                st.markdown("**Square Feet**")
+                st.markdown(f"### {selected_listing['property_sqft']}")
+
+        with col4:
+            with st.container(border=True):
+                st.markdown("**Property Type**")
+                st.markdown(f"### {selected_listing['property_type']}")
+
+        # -- Description section --
+        with st.container(border=True):
+            st.markdown("### Description")
+            st.write(selected_listing["description"])
+
+        # -- Contact section --
+        with st.container(border=True):
+            st.markdown("### Contact Information")
+            st.write(f"**Name:** {selected_listing['contact_name']}")
+            st.write(f"**Email:** {selected_listing['contact_email']}")
+            st.write(f"**Phone:** {selected_listing['contact_phone']}")
+
+        # -- Buttons --
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+
+        with col_btn1:
+            if st.button(
+                "Book an Appointment",
+                key=f"details_book_{selected_listing['id']}",
+                type="primary",
+                use_container_width=True
+            ):
+                st.session_state["booking_listing_id"] = selected_listing["id"]
+                st.rerun()
+
+        with col_btn2:
+            if st.button(
+                "Ask a Question(s)",
+                key=f"details_question_{selected_listing['id']}",
+                use_container_width=True
+            ):
+                st.session_state["question_listing_id"] = selected_listing["id"]
+                st.rerun()
+
+        with col_btn3:
             if st.button("Back to Listings", use_container_width=True):
                 st.session_state["page"] = "browse_listings"
                 st.session_state["booking_listing_id"] = None
                 st.rerun()
 
-            if st.session_state["booking_listing_id"] == selected_listing["id"]:
-                with st.container(border=True):
-                    st.markdown("### Book an Appointment")
+        # -- Booking Section -- 
+        if st.session_state["booking_listing_id"] == selected_listing["id"]:
+            with st.container(border=True):
+                st.markdown("### Appointment Form")
 
-                    appointment_name = st.text_input(
-                        "Full Name",
-                        value=st.session_state["user"]["full_name"],
-                        key=f"appointment_name_{selected_listing['id']}"
+                appointment_name = st.text_input(
+                    "Full Name",
+                    value=st.session_state["user"]["full_name"],
+                    key=f"appointment_name_{selected_listing['id']}"
+                )
+
+                appointment_email = st.text_input(
+                    "Email",
+                    value=st.session_state["user"]["email"],
+                    key=f"appointment_email_{selected_listing['id']}"
+                )
+
+                appointment_phone = st.text_input(
+                    "Phone Number",
+                    key=f"appointment_phone_{selected_listing['id']}"
+                )
+
+                appointment_type = st.selectbox(
+                    "Appointment Type",
+                    [
+                        "Select Type",
+                        "Property Walkthrough",
+                        "Initial Consultation",
+                        "Offer Discussion"
+                    ],
+                    key=f"appointment_type_{selected_listing['id']}"
+                )
+
+                appointment_date = st.date_input(
+                    "Preferred Appointment Date",
+                    key=f"appointment_date_{selected_listing['id']}"
+                )
+
+                appointment_time = st.time_input("Preferred Appointment Time", key = f"appointment_time_{selected_listing['id']}"
+                )
+
+                # -- Show in 12-hour format for the buyer -- 
+                st.write("Selected Time:", appointment_time.strftime("%I:%M %p"))
+                st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+
+                appointment_message = st.text_area(
+                    "Notes (Optional)",
+                    placeholder="Add any details or preferences here",
+                    key=f"appointment_message_{selected_listing['id']}"
+                )
+
+                col_submit, col_cancel = st.columns(2)
+
+                with col_submit:
+                    btn_submit_appointment = st.button(
+                        "Submit Appointment",
+                        key=f"submit_appointment_{selected_listing['id']}",
+                        type="primary",
+                        use_container_width=True
                     )
 
-                    appointment_email = st.text_input(
-                        "Email",
-                        value=st.session_state["user"]["email"],
-                        key=f"appointment_email_{selected_listing['id']}"
+                with col_cancel:
+                    btn_cancel_appointment = st.button(
+                        "Cancel",
+                        key=f"cancel_appointment_{selected_listing['id']}",
+                        use_container_width=True
                     )
 
-                    appointment_phone = st.text_input(
-                        "Phone Number",
-                        key=f"appointment_phone_{selected_listing['id']}"
+                if btn_cancel_appointment:
+                    st.session_state["booking_listing_id"] = None
+                    st.rerun()
+
+                if btn_submit_appointment:
+                    appointment_name = appointment_name.strip()
+                    appointment_email = appointment_email.strip().lower()
+                    appointment_phone = appointment_phone.strip()
+                    appointment_message = appointment_message.strip()
+
+                    if not appointment_name or not appointment_email or not appointment_phone:
+                        st.error("Please fill in all required fields.")
+                        st.stop()
+
+                    if not appointment_phone.isdigit() or len(appointment_phone) != 10:
+                        st.error("Enter a valid 10-digit phone number.")
+                        st.stop()
+
+                    if "@" not in appointment_email or "." not in appointment_email:
+                        st.error("Enter a valid email address.")
+                        st.stop()
+
+                    if appointment_type == "Select Type":
+                        st.error("Please select an appointment type.")
+                        st.stop()
+
+                    if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
+                        st.error("Appointments must be between 8:00 AM and 5:00 PM.")
+                        st.stop()
+
+                    with st.spinner("Submitting appointment..."):
+                        time.sleep(2)
+
+                        new_booking = {
+                            "id": str(uuid.uuid4()),
+                            "listing_id": selected_listing["id"],
+                            "property_title": selected_listing["title"],
+                            "agent_id": selected_listing["agent_id"],
+                            "buyer_id": st.session_state["user"]["id"],
+                            "buyer_name": appointment_name,
+                            "buyer_email": appointment_email,
+                            "buyer_phone": appointment_phone,
+                            "appointment_type": appointment_type,
+                            "appointment_date": str(appointment_date),
+                            "appointment_time": str(appointment_time),
+                            "message": appointment_message,
+                            "status": "Pending",
+                            "created_at": str(datetime.now())
+                        }
+
+                        bookings.append(new_booking)
+
+                        with json_file_bookings.open("w", encoding="utf-8") as f:
+                            json.dump(bookings, f, indent=4)
+
+                    st.success("Appointment submitted successfully!")
+                    time.sleep(4)
+                    st.session_state["booking_listing_id"] = None
+                    st.rerun()
+        # -- Question Section -- 
+        if st.session_state["question_listing_id"] == selected_listing["id"]:
+            with st.container(border=True):
+                st.markdown("### Question Form")
+
+                question_name = st.text_input(
+                    "Full Name",
+                    value=st.session_state["user"]["full_name"],
+                    key=f"question_name_{selected_listing['id']}"
+                )
+
+                question_email = st.text_input(
+                    "Email",
+                    value=st.session_state["user"]["email"],
+                    key=f"question_email_{selected_listing['id']}"
+                )
+
+                question_phone = st.text_input(
+                    "Phone Number",
+                    key=f"question_phone_{selected_listing['id']}"
+                )
+
+                question_subject = st.selectbox(
+                    "Subject",
+                    [
+                        "Select Subject",
+                        "Property Availability",
+                        "Schedule a Tour",
+                        "Pricing Information",
+                        "Financing Questions",
+                        "Property Details",
+                        "Make an Offer",
+                        "Other"
+                    ],
+                    key=f"question_subject_{selected_listing['id']}"
+                )
+
+                question_message = st.text_area(
+                    "Question",
+                    placeholder="Type your question here",
+                    key=f"question_message_{selected_listing['id']}"
+                )
+
+                col_submit_q, col_cancel_q = st.columns(2)
+
+                with col_submit_q:
+                    btn_submit_question = st.button(
+                        "Submit Question",
+                        key=f"submit_question_{selected_listing['id']}",
+                        type="primary",
+                        use_container_width=True
                     )
 
-                    appointment_type = st.selectbox(
-                        "Appointment Type",
-                        [
-                            "Select Type",
-                            "Property Walkthrough",
-                            "Initial Consultation",
-                            "Offer Discussion"
-                        ],
-                        key=f"appointment_type_{selected_listing['id']}"
+                with col_cancel_q:
+                    btn_cancel_question = st.button(
+                        "Cancel",
+                        key=f"cancel_question_{selected_listing['id']}",
+                        use_container_width=True
                     )
 
-                    appointment_date = st.date_input(
-                        "Preferred Appointment Date",
-                        key=f"appointment_date_{selected_listing['id']}"
-                    )
+                if btn_cancel_question:
+                    st.session_state["question_listing_id"] = None
+                    st.rerun()
 
-                    appointment_time = st.time_input(
-                        "Preferred Appointment Time",
-                        key=f"appointment_time_{selected_listing['id']}"
-                    )
-                    st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+                if btn_submit_question:
+                    question_name = question_name.strip()
+                    question_email = question_email.strip().lower()
+                    question_phone = question_phone.strip()
+                    question_subject = question_subject.strip()
+                    question_message = question_message.strip()
 
-                    appointment_message = st.text_area(
-                        "Notes (Optional)",
-                        placeholder="Add any details or preferences here",
-                        key=f"appointment_message_{selected_listing['id']}"
-                    )
+                    if (
+                        not question_name
+                        or not question_email
+                        or not question_phone
+                        or question_subject == "Select Subject"
+                        or not question_message
+                    ):
+                        st.error("Please fill in all required fields.")
+                        st.stop()                        
 
-                    col_submit, col_cancel = st.columns(2)
+                    if not question_phone.isdigit() or len(question_phone) != 10:
+                        st.error("Enter a valid 10-digit phone number.")
+                        st.stop()
 
-                    with col_submit:
-                        btn_submit_appointment = st.button(
-                            "Submit Appointment",
-                            key=f"submit_appointment_{selected_listing['id']}",
-                            type="primary",
-                            use_container_width=True
-                        )
+                    if "@" not in question_email or "." not in question_email:
+                        st.error("Enter a valid email address.")
+                        st.stop()
 
-                    with col_cancel:
-                        btn_cancel_appointment = st.button(
-                            "Cancel",
-                            key=f"cancel_appointment_{selected_listing['id']}",
-                            use_container_width=True
-                        )
+                    with st.spinner("Submitting question..."):
+                        time.sleep(2)
 
-                    if btn_cancel_appointment:
-                        st.session_state["booking_listing_id"] = None
-                        st.rerun()
+                        new_inquiry = {
+                            "id": str(uuid.uuid4()),
+                            "listing_id": selected_listing["id"],
+                            "property_title": selected_listing["title"],
+                            "agent_id": selected_listing["agent_id"],
+                            "buyer_id": st.session_state["user"]["id"],
+                            "buyer_name": question_name,
+                            "buyer_email": question_email,
+                            "buyer_phone": question_phone,
+                            "subject": question_subject,
+                            "message": question_message,
+                            "status": "New",
+                            "created_at": str(datetime.now())
+                        }
 
-                    if btn_submit_appointment:
-                        appointment_name = appointment_name.strip()
-                        appointment_email = appointment_email.strip().lower()
-                        appointment_phone = appointment_phone.strip()
-                        appointment_message = appointment_message.strip()
+                        inquiries.append(new_inquiry)
 
-                        if not appointment_name or not appointment_email or not appointment_phone:
-                            st.error("Please fill in all required fields.")
-                            st.stop()
+                        with json_file_inquiries.open("w", encoding="utf-8") as f:
+                            json.dump(inquiries, f, indent=4)
 
-                        if not appointment_phone.isdigit() or len(appointment_phone) != 10:
-                            st.error("Enter a valid 10-digit phone number.")
-                            st.stop()
-
-                        if "@" not in appointment_email or "." not in appointment_email:
-                            st.error("Enter a valid email address.")
-                            st.stop()
-
-                        if appointment_type == "Select Type":
-                            st.error("Please select an appointment type.")
-                            st.stop()
-
-                        if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
-                            st.error("Appointments must be between 8:00 AM and 5:00 PM.")
-                            st.stop()
-
-                        with st.spinner("Submitting appointment..."):
-                            time.sleep(2)
-
-                            new_booking = {
-                                "id": str(uuid.uuid4()),
-                                "listing_id": selected_listing["id"],
-                                "property_title": selected_listing["title"],
-                                "agent_id": selected_listing["agent_id"],
-                                "buyer_id": st.session_state["user"]["id"],
-                                "buyer_name": appointment_name,
-                                "buyer_email": appointment_email,
-                                "buyer_phone": appointment_phone,
-                                "appointment_type": appointment_type,
-                                "appointment_date": str(appointment_date),
-                                "appointment_time": str(appointment_time),
-                                "message": appointment_message,
-                                "status": "Pending",
-                                "created_at": str(datetime.now())
-                            }
-
-                            bookings.append(new_booking)
-
-                            with json_file_bookings.open("w", encoding="utf-8") as f:
-                                json.dump(bookings, f, indent=4)
-
-                        st.success("Appointment submitted successfully!")
-                        st.session_state["booking_listing_id"] = None
-                        st.rerun()
+                    st.success("Question submitted successfully!")
+                    time.sleep(2)
+                    st.session_state["question_listing_id"] = None
+                    st.rerun()
     # -- Sidebar for navigating pages and logging out for buyer -- 
     with st.sidebar:
         if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):

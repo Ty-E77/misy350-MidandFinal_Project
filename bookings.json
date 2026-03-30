@@ -1,0 +1,18 @@
+[
+    {
+        "id": "eae552ba-15cb-4c1c-bb05-f9c31ff6ff1b",
+        "listing_id": "1444bbfc-8113-4a0d-872a-491f61d78ada",
+        "property_title": "Modern 4 Bedroom Family Home",
+        "agent_id": "2dc79333-19fa-4756-9d95-ac957594e78a",
+        "buyer_id": "68507c1c-b2c4-4111-8dd2-0bd6abed33b3",
+        "buyer_name": "E Ty",
+        "buyer_email": "tyshawnelzey@gmail.com",
+        "buyer_phone": "1112223333",
+        "appointment_type": "Property Walkthrough",
+        "appointment_date": "2026-06-17",
+        "appointment_time": "13:45:00",
+        "message": "My first appointment",
+        "status": "Pending",
+        "created_at": "2026-03-30 13:16:41.516638"
+    }
+]
