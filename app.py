@@ -62,25 +62,95 @@ if "question_listing_id" not in st.session_state:
 
 # -- Creating registration & login page -- 
 def show_login_page():
-    tab1, tab2 = st.tabs(["Register", "Login"])
+    st.markdown("# Real Estate Finder")
+    st.caption("Browse listings, book appointments, and connect with agents.")
+    st.divider()
+
+    tab1, tab2 = st.tabs(["Log In", "Register"])
 
     with tab1:
-        with st.container(border = True):
-            st.header("Real Estate Finder")
-            st.markdown("## New Account")
-            email = st.text_input("Email", placeholder = "ex. 1234@gmail.com", key = "email_new")
-            full_name = st.text_input("Full Name:", placeholder = "ex. John Doe", key = "full_name_new")
-            password = st.text_input("Password", type = "password", key = "password_new")
-            role = st.radio("Role", ["Agent", "Buyer"])
-            btn_create = st.button("Create Account", use_container_width = True, disabled = False, type = "primary")
+        with st.container(border=True):
+            st.markdown("## Welcome Back")
+
+            email_login = st.text_input(
+                "Email",
+                placeholder="Enter your email",
+                key="login_email"
+            )
+            password_login = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            btn_login = st.button(
+                "Log In",
+                use_container_width=True,
+                type="primary"
+            )
+
+            if btn_login:
+                if not email_login or not password_login:
+                    st.warning("Please enter your email and password.")
+                    st.stop()
+
+                with st.spinner("Verifying credentials..."):
+                    time.sleep(1)
+
+                login_check = None
+                email_login = email_login.strip().lower()
+
+                for user in users:
+                    if user["email"] == email_login and user["password"] == password_login:
+                        login_check = user
+                        break
+
+                if login_check:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = login_check
+                    st.session_state["page"] = "home"
+                    st.rerun()
+                else:
+                    st.error("Invalid email or password.")
+
+    with tab2:
+        with st.container(border=True):
+            st.markdown("## Create Account")
+
+            full_name = st.text_input(
+                "Full Name",
+                placeholder="Enter your full name",
+                key="full_name_new"
+            )
+            email = st.text_input(
+                "Email",
+                placeholder="Enter your email",
+                key="email_new"
+            )
+            password = st.text_input(
+                "Password",
+                type="password",
+                key="password_new"
+            )
+            role = st.selectbox(
+                "Role",
+                ["Agent", "Buyer"],
+                key="role_new"
+            )
+
+            btn_create = st.button(
+                "Create Account",
+                use_container_width=True,
+                type="primary"
+            )
 
             if btn_create:
                 with st.spinner("Creating account..."):
                     time.sleep(1)
-                
-                # -- Checking for duplicate email and making sure an account doesn't exist --
+
                 new_email = email.strip().lower()
                 existing_user = None
+
                 for user in users:
                     if user["email"].strip().lower() == new_email:
                         existing_user = user
@@ -89,54 +159,24 @@ def show_login_page():
                 if existing_user is not None:
                     st.error("An account with this email already exists.")
                     st.stop()
-                elif not new_email or not password:
-                    st.error("Email and password are required.")
+
+                if not full_name or not new_email or not password:
+                    st.error("Please fill in all required fields.")
                     st.stop()
-                else:
-                        users.append ( {
-                        "id": str(uuid.uuid4()),
-                        "email": new_email,
-                        "full_name": full_name,
-                        "password": password,
-                        "role": role,
-                        "registered_at": str(datetime.now())
 
-        })
-                with json_file_users.open("w", encoding = "utf-8") as f:
-                            json.dump(users, f, indent = 4)
+                users.append({
+                    "id": str(uuid.uuid4()),
+                    "email": new_email,
+                    "full_name": full_name.strip(),
+                    "password": password,
+                    "role": role,
+                    "registered_at": str(datetime.now())
+                })
 
-                st.success("Account created successfully!")
-    with tab2:
-        with st.container(border = True):
-            st.header("Real Estate Finder")
-            st.markdown("## Log In")
-            email_login = st.text_input("Email", placeholder = "ex. 1234@gmail.com", key = "login_email")
-            password_login = st.text_input("Password", type = "password", key = "login_password")
+                with json_file_users.open("w", encoding="utf-8") as f:
+                    json.dump(users, f, indent=4)
 
-            btn_login = st.button("Log In", use_container_width = True, disabled = False, type = "primary")
-
-            if btn_login:
-                if (email_login == "") or (password_login == ""):
-                    st.warning("Missing required information")
-                    st.stop()
-                else:
-                    with st.spinner("Verifying credentials..."):
-                        time.sleep(2)
-
-                    login_check = None
-                    email_login = email_login.strip().lower()
-                    for user in users:
-                        if user["email"] == email_login and user["password"] == password_login:
-                            login_check = user
-                            break
-
-                    if login_check:
-                        st.session_state["logged_in"] = True
-                        st.session_state["user"] = login_check
-                        st.session_state["page"] = "home"
-                        st.rerun()
-                    else:
-                        st.error("Invalid email or password.")
+                st.success("Account created successfully! You can now log in.")
 
 # -- Defining application for agent --                                 
 def show_main_app_agent():
