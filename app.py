@@ -54,8 +54,12 @@ if "page" not in st.session_state:
 # -- Agent Session States --
 if "selected_agent_listing_id" not in st.session_state:
     st.session_state["selected_agent_listing_id"] = None
+
 if "selected_other_listing_id" not in st.session_state:
     st.session_state["selected_other_listing_id"] = None
+
+if "edit_agent_inquiry_id" not in st.session_state:
+    st.session_state["edit_agent_inquiry_id"] = None
 
 # -- Buyer Session States -- 
 if "booking_listing_id" not in st.session_state:
@@ -195,7 +199,8 @@ def show_login_page():
 def show_main_app_agent():
     # -- Dashboard Page --
     if st.session_state["page"] == "home":
-        st.markdown(f"## Agent Dashboard - {st.session_state['user']['full_name']}")
+        st.markdown(f"# Agent Dashboard - {st.session_state['user']['full_name']}")
+        st.divider()
 
     # -- Properties Page --
     elif st.session_state["page"] == "properties_listings":
@@ -610,7 +615,7 @@ def show_main_app_agent():
         st.caption("Create a new property listing for buyers to view, book, and inquire about.")
         st.divider()
 
-        # Listing Overview
+        # -- Listing Overview --
         with st.container(border=True):
             st.markdown("### Listing Overview")
             title = st.text_input(
@@ -622,7 +627,7 @@ def show_main_app_agent():
                 placeholder="Write a short description of the property"
             )
 
-        # Property Details
+        # -- Property Details --
         with st.container(border=True):
             st.markdown("### Property Details")
 
@@ -644,7 +649,7 @@ def show_main_app_agent():
                 bathrooms = st.number_input("Bathrooms", min_value=0, step=1)
                 property_sqft = st.number_input("Property Square Footage", min_value=1, step=1)
 
-        # Location
+        # -- Location --
         with st.container(border=True):
             st.markdown("### Property Location")
 
@@ -659,7 +664,7 @@ def show_main_app_agent():
             with col2:
                 state = st.text_input("State", placeholder="Enter state")
 
-        # Contact Information
+        # -- Contact Information --
         with st.container(border=True):
             st.markdown("### Contact Information")
 
@@ -680,7 +685,6 @@ def show_main_app_agent():
                     placeholder="3025551234"
                 )
 
-        # Action buttons
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
@@ -770,11 +774,172 @@ def show_main_app_agent():
             st.session_state["page"] = "properties_listings"
             st.rerun()
 
+    # -- Buyer bookings/inquiries Page -- 
     elif st.session_state["page"] == "buyer_inquiries":
-        st.markdown(f"## Buyer Inquiries")
+        st.markdown("# Buyer Bookings & Inquiries")
+        st.divider()
+
+        tab_bookings, tab_inquiries = st.tabs(["View Bookings", "View Inquiries"])
+
+        # -- Booking Section
+        with tab_bookings:
+            agent_bookings = []
+            for booking in bookings:
+                if booking["agent_id"] == st.session_state["user"]["id"]:
+                    agent_bookings.append(booking)
+
+            st.markdown("### Booking Requests")
+            st.markdown(f"**Total Bookings:** {len(agent_bookings)}")
+            st.divider()
+
+            if not agent_bookings:
+                st.info("You do not have any booking requests.")
+            else:
+                for booking in agent_bookings:
+                    with st.container(border=True):
+                        col_left, col_right = st.columns([3, 1])
+
+                        with col_left:
+                            st.markdown(f"### {booking['property_title']}")
+                            st.markdown(f"**Buyer:** {booking['buyer_name']}")
+                            st.markdown(f"**Email:** {booking['buyer_email']}")
+                            st.markdown(f"**Phone:** {booking['buyer_phone']}")
+                            st.markdown(f"**Appointment Type:** {booking['appointment_type']}")
+                            st.markdown(f"**Date:** {booking['appointment_date']}")
+                            st.markdown(f"**Time:** {booking['appointment_time']}")
+
+                        with col_right:
+                            st.markdown(f"### {booking['status']}")
+
+                        if booking["message"]:
+                            st.markdown(f"**Notes:** {booking['message']}")
+                        else:
+                            st.markdown("**Notes:** No additional notes provided.")
+
+                        st.divider()
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            if st.button(
+                                "Confirm Appointment",
+                                key=f"confirm_booking_{booking['id']}",
+                                type="primary",
+                                use_container_width=True
+                            ):
+                                booking["status"] = "Confirmed"
+                                with json_file_bookings.open("w", encoding="utf-8") as f:
+                                    json.dump(bookings, f, indent=4)
+                                st.success("Appointment confirmed successfully!")
+                                st.rerun()
+
+                        with col2:
+                            if st.button(
+                                "Decline Appointment",
+                                key=f"decline_booking_{booking['id']}",
+                                use_container_width=True
+                            ):
+                                booking["status"] = "Declined"
+                                with json_file_bookings.open("w", encoding="utf-8") as f:
+                                    json.dump(bookings, f, indent=4)
+                                st.success("Appointment declined.")
+                                st.rerun()
+
+        # -- Inquiries Tab --
+        with tab_inquiries:
+            agent_inquiries = []
+            for inquiry in inquiries:
+                if inquiry["agent_id"] == st.session_state["user"]["id"]:
+                    agent_inquiries.append(inquiry)
+
+            st.markdown("### Buyer Inquiries")
+            st.markdown(f"**Total Inquiries:** {len(agent_inquiries)}")
+            st.divider()
+
+            if not agent_inquiries:
+                st.info("You do not have any buyer inquiries.")
+            else:
+                for inquiry in agent_inquiries:
+                    with st.container(border=True):
+                        col_left, col_right = st.columns([3, 1])
+
+                        with col_left:
+                            st.markdown(f"### {inquiry['property_title']}")
+                            st.markdown(f"**Buyer:** {inquiry['buyer_name']}")
+                            st.markdown(f"**Email:** {inquiry['buyer_email']}")
+                            st.markdown(f"**Phone:** {inquiry['buyer_phone']}")
+                            st.markdown(f"**Subject:** {inquiry['subject']}")
+                            st.markdown(f"**Question:** {inquiry['message']}")
+
+                        with col_right:
+                            st.markdown(f"### {inquiry['status']}")
+
+                        if inquiry.get("response"):
+                            st.markdown("**Current Response:**")
+                            st.markdown(inquiry["response"])
+
+                        st.divider()
+
+                        if st.button(
+                            "Respond to Inquiry",
+                            key=f"edit_agent_inquiry_{inquiry['id']}",
+                            use_container_width=True
+                        ):
+                            st.session_state["edit_agent_inquiry_id"] = inquiry["id"]
+                            st.rerun()
+
+                        if st.session_state["edit_agent_inquiry_id"] == inquiry["id"]:
+                            with st.container(border=True):
+                                st.markdown("### Update Inquiry")
+
+                                updated_status = st.selectbox(
+                                    "Status",
+                                    ["New", "In Progress", "Answered"],
+                                    index=["New", "In Progress", "Answered"].index(inquiry["status"])
+                                    if inquiry["status"] in ["New", "In Progress", "Answered"] else 0,
+                                    key=f"agent_inquiry_status_{inquiry['id']}"
+                                )
+
+                                updated_response = st.text_area(
+                                    "Response to Buyer",
+                                    value=inquiry.get("response", ""),
+                                    placeholder="Type your answer here",
+                                    key=f"agent_inquiry_response_{inquiry['id']}"
+                                )
+
+                                col_save, col_cancel = st.columns(2)
+
+                                with col_save:
+                                    if st.button(
+                                        "Save Response",
+                                        key=f"save_agent_inquiry_{inquiry['id']}",
+                                        type="primary",
+                                        use_container_width=True
+                                    ):
+                                        if updated_status == "Answered" and not updated_response.strip():
+                                            st.error("Please enter a response before marking as Answered.")
+                                            st.stop()
+
+                                        inquiry["status"] = updated_status
+                                        inquiry["response"] = updated_response.strip()
+                                        inquiry["response_at"] = str(datetime.now()) if updated_response.strip() else ""
+
+                                        with json_file_inquiries.open("w", encoding="utf-8") as f:
+                                            json.dump(inquiries, f, indent=4)
+
+                                        st.success("Inquiry updated successfully!")
+                                        st.session_state["edit_agent_inquiry_id"] = None
+                                        st.rerun()
+
+                                with col_cancel:
+                                    if st.button(
+                                        "Cancel",
+                                        key=f"cancel_agent_inquiry_{inquiry['id']}",
+                                        use_container_width=True
+                                    ):
+                                        st.session_state["edit_agent_inquiry_id"] = None
+                                        st.rerun()
     
-
-
     # -- Sidebar for navigating pages and logging out for agent -- 
     with st.sidebar:
         st.markdown("# **Navigator**")
@@ -1378,6 +1543,18 @@ def show_main_app_buyer():
                             st.markdown(f"### {inquiry['status']}")
 
                         st.markdown(f"**Submitted:** {inquiry['created_at']}")
+
+                        # --- Agent response section ---
+                        if inquiry.get("response") and inquiry["response"].strip():
+                            st.markdown("### Agent Response")
+                            st.markdown(inquiry["response"])
+
+                            if inquiry.get("response_at") and str(inquiry["response_at"]).strip():
+                                st.markdown(f"**Responded:** {inquiry['response_at']}")
+                        else:
+                            st.markdown("### Agent Response")
+                            st.markdown("*No response yet.*")
+
                         st.divider()
 
                         col1, col2 = st.columns(2)
@@ -1477,31 +1654,31 @@ def show_main_app_buyer():
                                     ):
                                         st.session_state["edit_inquiry_id"] = None
                                         st.rerun()
-                    
-    # -- Sidebar for navigating pages and logging out for buyer -- 
-    with st.sidebar:
-        if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
-            st.session_state["page"] = "home"
-            st.rerun()
+                            
+            # -- Sidebar for navigating pages and logging out for buyer -- 
+            with st.sidebar:
+                if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
+                    st.session_state["page"] = "home"
+                    st.rerun()
 
-        if st.button("Browse Listings", key = "browse_listings", type = "primary", use_container_width = True):
-            st.session_state["page"] = "browse_listings"
-            st.rerun()
-        
-        if st.button("My Bookings & Inquiries", key = "my_inquiries", type = "primary", use_container_width = True):
-            st.session_state["page"] = "my_inquiries"
-            st.rerun()
-        
-        st.write(f"Logged in as: {st.session_state['user']['email']}")
-        st.write(f"Role: {st.session_state['user']['role']}")
+                if st.button("Browse Listings", key = "browse_listings", type = "primary", use_container_width = True):
+                    st.session_state["page"] = "browse_listings"
+                    st.rerun()
+                
+                if st.button("My Bookings & Inquiries", key = "my_inquiries", type = "primary", use_container_width = True):
+                    st.session_state["page"] = "my_inquiries"
+                    st.rerun()
+                
+                st.write(f"Logged in as: {st.session_state['user']['email']}")
+                st.write(f"Role: {st.session_state['user']['role']}")
 
-        if st.button("Log Out", type="primary", use_container_width=True):
-            st.session_state["logged_in"] = False
-            st.session_state["user"] = None
-            st.session_state["page"] = "home"
-            st.session_state["booking_listing_id"] = None
-            st.session_state["selected_listing_id"] = None
-            st.rerun()
+                if st.button("Log Out", type="primary", use_container_width=True):
+                    st.session_state["logged_in"] = False
+                    st.session_state["user"] = None
+                    st.session_state["page"] = "home"
+                    st.session_state["booking_listing_id"] = None
+                    st.session_state["selected_listing_id"] = None
+                    st.rerun()
 
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
