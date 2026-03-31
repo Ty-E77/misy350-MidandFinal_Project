@@ -8,7 +8,11 @@ import uuid
 import time
 
 # -- Setting page configuration --
-st.set_page_config(page_title = "Real Estate Finder", page_icon = "", layout = "centered", initial_sidebar_state = "collapsed")
+st.set_page_config(page_title = "Real Estate Finder", 
+                   page_icon = "",
+                   layout = "centered",
+                   initial_sidebar_state = "collapsed")
+
 
 # -- Loading all json files -- 
 json_file_properties = Path("properties.json")
@@ -1856,7 +1860,7 @@ def show_main_app_buyer():
                                         st.rerun()
                             
     # -- Sidebar for navigating pages and logging out for buyer -- 
-    with st.sidebar:
+    with st.sidebar():
         if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
             st.session_state["page"] = "home"
             st.rerun()

@@ -12,7 +12,7 @@
         "appointment_date": "2026-06-17",
         "appointment_time": "13:45:00",
         "message": "My first appointment",
-        "status": "Pending",
+        "status": "Confirmed",
         "created_at": "2026-03-30 13:16:41.516638"
     }
 ]
