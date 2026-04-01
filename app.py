@@ -14,32 +14,54 @@ st.set_page_config(page_title = "Real Estate Finder",
                    initial_sidebar_state = "collapsed")
 
 
-# -- Loading all json files -- 
+# -- Loading all json files and setting deafults  -- 
+def load_json_list(file_path):
+    if not file_path.exists():
+        return []
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, list):
+            return data
+        else:
+            return []
+
+    except (json.JSONDecodeError, OSError):
+        return []
+    
 json_file_properties = Path("properties.json")
 json_file_users = Path("users.json")
 json_file_inquiries = Path("inquiry.json")
 json_file_bookings = Path("bookings.json")
 
-properties = []
-users = []
-inquiries = []
-bookings = [] 
+users = load_json_list(json_file_users)
+for user in users:
+    user.setdefault("full_name", "")
+    user.setdefault("role", "")
 
-if json_file_properties.exists():
-    with open(json_file_properties, "r") as f:
-        properties = json.load(f)
+properties = load_json_list(json_file_properties)
+for listing in properties:
+    listing.setdefault("status", "Available")
+    listing.setdefault("description", "")
+    listing.setdefault("contact_name", "")
+    listing.setdefault("contact_email", "")
+    listing.setdefault("contact_phone", "")
 
-if json_file_users.exists():
-    with open(json_file_users, "r") as f:
-        users = json.load(f)
 
-if json_file_inquiries.exists():
-    with open(json_file_inquiries, "r") as f:
-        inquiries = json.load(f)
+inquiries = load_json_list(json_file_inquiries)
+for inquiry in inquiries:
+    inquiry.setdefault("response", "")
+    inquiry.setdefault("response_at", "")
+    inquiry.setdefault("status", "New")
+    inquiry.setdefault("subject", "")
+    inquiry.setdefault("message", "")
 
-if json_file_bookings.exists():
-    with open(json_file_bookings, "r") as f:
-        bookings = json.load(f)
+bookings = load_json_list(json_file_bookings)
+for booking in bookings:
+    booking.setdefault("status", "Pending")
+    booking.setdefault("message", "")
 
 # -- Session state defaults -- 
 if "logged_in" not in st.session_state:
@@ -203,7 +225,7 @@ def show_main_app_agent():
         st.caption("Manage listings, review buyer bookings, and respond to inquiries.")
         st.divider()
 
-        # Calculate stats
+        # -- Calculate stats -- 
         my_listings_count = 0
         available_listings_count = 0
         pending_bookings_count = 0
@@ -232,7 +254,7 @@ def show_main_app_agent():
                 if inquiry["status"] == "New":
                     new_inquiries_count += 1
 
-        # Stat cards
+        # -- Stat Section --
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -257,7 +279,7 @@ def show_main_app_agent():
 
         st.divider()
 
-        # Quick actions
+        # -- Quick actions -- 
         st.markdown("### Quick Actions")
 
         col_a, col_b, col_c = st.columns(3)
@@ -279,7 +301,7 @@ def show_main_app_agent():
 
         st.divider()
 
-        # Recent activity
+        # -- Recent activity -- 
         st.markdown("### Recent Activity")
 
         latest_listing = agent_listings[-1] if agent_listings else None
@@ -1051,19 +1073,20 @@ def show_main_app_agent():
     # -- Sidebar for navigating pages and logging out for agent -- 
     with st.sidebar:
         st.markdown("# **Navigator**")
-        if st.button("Dashboard", key = "agent_dashboard_btn", type = "primary", use_container_width = True):
+
+        if st.button("Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "home"
             st.rerun()
 
-        if st.button("View/Manage Property Listings", key = "properties_listings", type = "primary", use_container_width = True):
+        if st.button("View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "properties_listings"
             st.rerun()
-        
-        if st.button("Add Property Listings", key = "add_listings", type = "primary", use_container_width = True):
+
+        if st.button("Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "add_listings"
             st.rerun()
-        
-        if st.button("Buyer Bookings & Inquiries", key = "buyer_inquiries", type = "primary", use_container_width = True):
+
+        if st.button("Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "buyer_inquiries"
             st.rerun()
         
@@ -1087,7 +1110,7 @@ def show_main_app_buyer():
         st.caption("Browse listings, book appointments, and manage your inquiries.")
         st.divider()
 
-        # Calculate stats
+        # -- Calculate stats --
         available_listings = 0
         my_bookings = 0
         my_inquiries = 0
@@ -1107,7 +1130,7 @@ def show_main_app_buyer():
             if inquiry["buyer_id"] == st.session_state["user"]["id"]:
                 my_inquiries += 1
 
-        # Stat cards
+        # -- Stat Section -- 
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -1132,7 +1155,7 @@ def show_main_app_buyer():
 
         st.divider()
 
-        # Quick actions
+        #-- Quick actions --
         st.markdown("### Quick Actions")
 
         col_a, col_b = st.columns(2)
@@ -1149,7 +1172,7 @@ def show_main_app_buyer():
 
         st.divider()
 
-        # Recent activity
+        # -- Recent activity --
         st.markdown("### Recent Activity")
 
         latest_booking = None
@@ -1328,7 +1351,7 @@ def show_main_app_buyer():
                     st.rerun()
 
             with col_btn3:
-                if st.button("Back to Listings", use_container_width=True):
+                if st.button("Back to Listings", key="buyer_back_to_listings_btn", use_container_width=True):
                     st.session_state["page"] = "browse_listings"
                     st.session_state["booking_listing_id"] = None
                     st.rerun()
@@ -1457,7 +1480,6 @@ def show_main_app_buyer():
                                 json.dump(bookings, f, indent=4)
 
                         st.success("Appointment submitted successfully!")
-                        time.sleep(4)
                         st.session_state["booking_listing_id"] = None
                         st.rerun()
             # -- Question Section -- 
@@ -1573,7 +1595,6 @@ def show_main_app_buyer():
                                 json.dump(inquiries, f, indent=4)
 
                         st.success("Question submitted successfully!")
-                        time.sleep(2)
                         st.session_state["question_listing_id"] = None
                         st.rerun()
     
@@ -1782,7 +1803,6 @@ def show_main_app_buyer():
                                 with json_file_inquiries.open("w", encoding="utf-8") as f:
                                     json.dump(inquiries, f, indent=4)
                                 st.success("Inquiry deleted successfully!")
-                                time.sleep(2)
                                 st.rerun()
 
                         if st.session_state["edit_inquiry_id"] == inquiry["id"]:
@@ -1846,7 +1866,6 @@ def show_main_app_buyer():
                                             json.dump(inquiries, f, indent=4)
 
                                         st.success("Inquiry updated successfully!")
-                                        time.sleep(2)
                                         st.session_state["edit_inquiry_id"] = None
                                         st.rerun()
 
@@ -1860,16 +1879,18 @@ def show_main_app_buyer():
                                         st.rerun()
                             
     # -- Sidebar for navigating pages and logging out for buyer -- 
-    with st.sidebar():
-        if st.button("Dashboard", key = "buyer_dashboard_btn", type = "primary", use_container_width = True):
+    with st.sidebar:
+        st.markdown("# **Navigator**")
+
+        if st.button("Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "home"
             st.rerun()
 
-        if st.button("Browse Listings", key = "browse_listings", type = "primary", use_container_width = True):
+        if st.button("Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "browse_listings"
             st.rerun()
-                
-        if st.button("My Bookings & Inquiries", key = "my_inquiries", type = "primary", use_container_width = True):
+
+        if st.button("My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "my_inquiries"
             st.rerun()
                 
