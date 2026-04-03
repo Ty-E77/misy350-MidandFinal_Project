@@ -11,10 +11,10 @@ import time
 st.set_page_config(page_title = "Real Estate Finder", 
                    page_icon = "",
                    layout = "centered",
-                   initial_sidebar_state = "collapsed")
+                   initial_sidebar_state = "expanded")
 
 
-# -- Loading all json files and setting deafults  -- 
+# -- Loading all json files, defining a valdation check for all json files, and setting defaults  -- 
 def load_json_list(file_path):
     if not file_path.exists():
         return []
@@ -31,17 +31,45 @@ def load_json_list(file_path):
     except (json.JSONDecodeError, OSError):
         return []
     
+def is_valid_user(user):
+    required_keys = ["id", "email", "password", "role"]
+    return isinstance(user, dict) and all(key in user for key in required_keys)
+
+def is_valid_property(listing):
+    required_keys = [
+        "id", "agent_id", "title", "address", "city", "state",
+        "price", "bedrooms", "bathrooms", "property_sqft", "property_type"
+    ]
+    return isinstance(listing, dict) and all(key in listing for key in required_keys)
+
+def is_valid_inquiry(inquiry):
+    required_keys = [
+        "id", "listing_id", "property_title", "agent_id", "buyer_id",
+        "buyer_name", "buyer_email", "buyer_phone", "subject", "message"
+    ]
+    return isinstance(inquiry, dict) and all(key in inquiry for key in required_keys)
+
+def is_valid_booking(booking):
+    required_keys = [
+        "id", "listing_id", "property_title", "agent_id", "buyer_id",
+        "buyer_name", "buyer_email", "buyer_phone", "appointment_type",
+        "appointment_date", "appointment_time"
+    ]
+    return isinstance(booking, dict) and all(key in booking for key in required_keys)
+    
 json_file_properties = Path("properties.json")
 json_file_users = Path("users.json")
 json_file_inquiries = Path("inquiry.json")
 json_file_bookings = Path("bookings.json")
 
 users = load_json_list(json_file_users)
+users = [user for user in users if is_valid_user(user)]
 for user in users:
     user.setdefault("full_name", "")
     user.setdefault("role", "")
 
 properties = load_json_list(json_file_properties)
+properties = [listing for listing in properties if is_valid_property(listing)]
 for listing in properties:
     listing.setdefault("status", "Available")
     listing.setdefault("description", "")
@@ -51,6 +79,7 @@ for listing in properties:
 
 
 inquiries = load_json_list(json_file_inquiries)
+inquiries = [inquiry for inquiry in inquiries if is_valid_inquiry(inquiry)]
 for inquiry in inquiries:
     inquiry.setdefault("response", "")
     inquiry.setdefault("response_at", "")
@@ -59,9 +88,15 @@ for inquiry in inquiries:
     inquiry.setdefault("message", "")
 
 bookings = load_json_list(json_file_bookings)
+bookings = [booking for booking in bookings if is_valid_booking(booking)]
 for booking in bookings:
     booking.setdefault("status", "Pending")
     booking.setdefault("message", "")
+
+# --  Functions for repetitive tasks --
+def save_json_list(file_path, data):
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 # -- Session state defaults -- 
 if "logged_in" not in st.session_state:
@@ -124,6 +159,7 @@ def show_login_page():
 
             btn_login = st.button(
                 "Log In",
+                key="auth_login_submit_btn",
                 use_container_width=True,
                 type="primary"
             )
@@ -134,7 +170,7 @@ def show_login_page():
                     st.stop()
 
                 with st.spinner("Verifying credentials..."):
-                    time.sleep(1)
+                    time.sleep(0.5)
 
                 login_check = None
                 email_login = email_login.strip().lower()
@@ -178,14 +214,15 @@ def show_login_page():
             )
 
             btn_create = st.button(
-                "Create Account",
-                use_container_width=True,
-                type="primary"
+            "Create Account",
+            key="auth_register_submit_btn",
+            use_container_width=True,
+            type="primary"
             )
 
             if btn_create:
                 with st.spinner("Creating account..."):
-                    time.sleep(1)
+                    time.sleep(0.5)
 
                 new_email = email.strip().lower()
                 existing_user = None
@@ -211,9 +248,8 @@ def show_login_page():
                     "role": role,
                     "registered_at": str(datetime.now())
                 })
-
-                with json_file_users.open("w", encoding="utf-8") as f:
-                    json.dump(users, f, indent=4)
+                
+                save_json_list(json_file_users, users)
 
                 st.success("Account created successfully! You can now log in.")
 
@@ -285,17 +321,17 @@ def show_main_app_agent():
         col_a, col_b, col_c = st.columns(3)
 
         with col_a:
-            if st.button("View My Listings", type="primary", use_container_width=True):
+            if st.button("View My Listings", key="agent_home_view_listings_btn", type="primary", use_container_width=True):
                 st.session_state["page"] = "properties_listings"
                 st.rerun()
 
         with col_b:
-            if st.button("Add New Listing", use_container_width=True):
+            if st.button("Add New Listing", key="agent_home_add_listing_btn", use_container_width=True):
                 st.session_state["page"] = "add_listings"
                 st.rerun()
 
         with col_c:
-            if st.button("View Buyer Requests", use_container_width=True):
+            if st.button("View Buyer Requests", key="agent_home_buyer_requests_btn", use_container_width=True):
                 st.session_state["page"] = "buyer_inquiries"
                 st.rerun()
 
@@ -548,7 +584,7 @@ def show_main_app_agent():
                         json.dump(properties, f, indent=4)
 
                     st.success("Listing deleted successfully!")
-                    time.sleep(2)
+                    time.sleep(0.5)
                     st.session_state["selected_agent_listing_id"] = None
                     st.session_state["page"] = "properties_listings"
                     st.rerun()
@@ -653,7 +689,7 @@ def show_main_app_agent():
                         json.dump(properties, f, indent=4)
 
                     st.success("Listing updated successfully!")
-                    time.sleep(2)
+                    time.sleep(0.5)
                     st.session_state["page"] = "manage_listing"
                     st.rerun()
 
@@ -820,6 +856,7 @@ def show_main_app_agent():
         with col_btn1:
             btn_add_listing = st.button(
                 "Add Listing",
+                key="agent_add_listing_submit_btn",
                 type="primary",
                 use_container_width=True
             )
@@ -827,6 +864,7 @@ def show_main_app_agent():
         with col_btn2:
             btn_cancel_listing = st.button(
                 "Cancel",
+                key="agent_cancel_listing_submit_btn",
                 use_container_width=True
             )
 
@@ -836,7 +874,7 @@ def show_main_app_agent():
 
         if btn_add_listing:
             with st.spinner("Listing is being created..."):
-                time.sleep(2)
+                time.sleep(0.5)
 
                 title = title.strip()
                 description = description.strip()
@@ -900,7 +938,7 @@ def show_main_app_agent():
 
             st.success("Listing added successfully!")
             st.balloons()
-            time.sleep(2)
+            time.sleep(0.5)
             st.session_state["page"] = "properties_listings"
             st.rerun()
 
@@ -1093,7 +1131,7 @@ def show_main_app_agent():
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
 
-        if st.button("Log Out", type="primary", use_container_width=True):
+        if st.button("Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
@@ -1161,12 +1199,12 @@ def show_main_app_buyer():
         col_a, col_b = st.columns(2)
 
         with col_a:
-            if st.button("Browse Listings", type="primary", use_container_width=True):
+            if st.button("Browse Listings", key="buyer_home_browse_btn", type="primary", use_container_width=True):
                 st.session_state["page"] = "browse_listings"
                 st.rerun()
 
         with col_b:
-            if st.button("View My Bookings & Inquiries", use_container_width=True):
+            if st.button("View My Bookings & Inquiries", key="buyer_home_requests_btn", use_container_width=True):
                 st.session_state["page"] = "my_inquiries"
                 st.rerun()
 
@@ -1351,7 +1389,7 @@ def show_main_app_buyer():
                     st.rerun()
 
             with col_btn3:
-                if st.button("Back to Listings", key="buyer_back_to_listings_btn", use_container_width=True):
+                if st.button("Back to Listings", key="buyer_details_back_btn", use_container_width=True):
                     st.session_state["page"] = "browse_listings"
                     st.session_state["booking_listing_id"] = None
                     st.rerun()
@@ -1455,7 +1493,7 @@ def show_main_app_buyer():
                             st.stop()
 
                         with st.spinner("Submitting appointment..."):
-                            time.sleep(2)
+                            time.sleep(0.5)
 
                             new_booking = {
                                 "id": str(uuid.uuid4()),
@@ -1572,7 +1610,7 @@ def show_main_app_buyer():
                             st.stop()
 
                         with st.spinner("Submitting question..."):
-                            time.sleep(2)
+                            time.sleep(0.5)
 
                             new_inquiry = {
                                 "id": str(uuid.uuid4()),
@@ -1897,7 +1935,7 @@ def show_main_app_buyer():
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
 
-        if st.button("Log Out", type="primary", use_container_width=True):
+        if st.button("Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
