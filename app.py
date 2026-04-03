@@ -9,7 +9,7 @@ import time
 
 # -- Setting page configuration --
 st.set_page_config(page_title = "Real Estate Finder", 
-                   page_icon = "",
+                   page_icon = "🏠",
                    layout = "centered",
                    initial_sidebar_state = "expanded")
 
@@ -1111,26 +1111,26 @@ def show_main_app_agent():
     with st.sidebar:
         st.markdown("# **Navigator**")
 
-        if st.button("Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
+        if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "home"
             st.rerun()
 
-        if st.button("View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
+        if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "properties_listings"
             st.rerun()
 
-        if st.button("Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
+        if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "add_listings"
             st.rerun()
 
-        if st.button("Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
+        if st.button("➕ Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "buyer_inquiries"
             st.rerun()
         
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
 
-        if st.button("Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
+        if st.button("🚪 Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
@@ -1920,22 +1920,22 @@ def show_main_app_buyer():
     with st.sidebar:
         st.markdown("# **Navigator**")
 
-        if st.button("Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
+        if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "home"
             st.rerun()
 
-        if st.button("Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
+        if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "browse_listings"
             st.rerun()
 
-        if st.button("My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
+        if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "my_inquiries"
             st.rerun()
                 
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
 
-        if st.button("Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
+        if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["user"] = None
             st.session_state["page"] = "home"
