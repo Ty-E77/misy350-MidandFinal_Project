@@ -580,8 +580,8 @@ def show_main_app_agent():
                     use_container_width=True
                 ):
                     properties.remove(selected_listing)
-                    with json_file_properties.open("w", encoding="utf-8") as f:
-                        json.dump(properties, f, indent=4)
+                    
+                    save_json_list(json_file_properties, properties)
 
                     st.success("Listing deleted successfully!")
                     time.sleep(0.5)
@@ -684,9 +684,8 @@ def show_main_app_agent():
                     selected_listing["property_sqft"] = property_sqft
                     selected_listing["property_type"] = property_type
                     selected_listing["status"] = status
-
-                    with json_file_properties.open("w", encoding="utf-8") as f:
-                        json.dump(properties, f, indent=4)
+                    
+                    save_json_list(json_file_properties, properties)
 
                     st.success("Listing updated successfully!")
                     time.sleep(0.5)
@@ -933,8 +932,7 @@ def show_main_app_agent():
 
             properties.append(new_listing)
 
-            with json_file_properties.open("w", encoding="utf-8") as f:
-                json.dump(properties, f, indent=4)
+            save_json_list(json_file_properties, properties)
 
             st.success("Listing added successfully!")
             st.balloons()
@@ -996,8 +994,9 @@ def show_main_app_agent():
                                 use_container_width=True
                             ):
                                 booking["status"] = "Confirmed"
-                                with json_file_bookings.open("w", encoding="utf-8") as f:
-                                    json.dump(bookings, f, indent=4)
+
+                                save_json_list(json_file_bookings, bookings)
+
                                 st.success("Appointment confirmed successfully!")
                                 st.rerun()
 
@@ -1008,8 +1007,9 @@ def show_main_app_agent():
                                 use_container_width=True
                             ):
                                 booking["status"] = "Declined"
-                                with json_file_bookings.open("w", encoding="utf-8") as f:
-                                    json.dump(bookings, f, indent=4)
+
+                                save_json_list(json_file_bookings, bookings)
+
                                 st.success("Appointment declined.")
                                 st.rerun()
 
@@ -1091,9 +1091,8 @@ def show_main_app_agent():
                                         inquiry["status"] = updated_status
                                         inquiry["response"] = updated_response.strip()
                                         inquiry["response_at"] = str(datetime.now()) if updated_response.strip() else ""
-
-                                        with json_file_inquiries.open("w", encoding="utf-8") as f:
-                                            json.dump(inquiries, f, indent=4)
+                                        
+                                        save_json_list(json_file_inquiries, inquiries)
 
                                         st.success("Inquiry updated successfully!")
                                         st.session_state["edit_agent_inquiry_id"] = None
@@ -1513,13 +1512,13 @@ def show_main_app_buyer():
                             }
 
                             bookings.append(new_booking)
-
-                            with json_file_bookings.open("w", encoding="utf-8") as f:
-                                json.dump(bookings, f, indent=4)
+                            
+                            save_json_list(json_file_bookings, bookings)
 
                         st.success("Appointment submitted successfully!")
                         st.session_state["booking_listing_id"] = None
                         st.rerun()
+
             # -- Question Section -- 
             if st.session_state["question_listing_id"] == selected_listing["id"]:
                 with st.container(border=True):
@@ -1629,8 +1628,7 @@ def show_main_app_buyer():
 
                             inquiries.append(new_inquiry)
 
-                            with json_file_inquiries.open("w", encoding="utf-8") as f:
-                                json.dump(inquiries, f, indent=4)
+                            save_json_list(json_file_inquiries, inquiries)
 
                         st.success("Question submitted successfully!")
                         st.session_state["question_listing_id"] = None
@@ -1695,8 +1693,9 @@ def show_main_app_buyer():
                                 use_container_width=True
                             ):
                                 bookings.remove(booking)
-                                with json_file_bookings.open("w", encoding="utf-8") as f:
-                                    json.dump(bookings, f, indent=4)
+
+                                save_json_list(json_file_bookings, bookings)
+
                                 st.success("Booking deleted successfully!")
                                 st.rerun()
 
@@ -1764,8 +1763,7 @@ def show_main_app_buyer():
                                         booking["appointment_time"] = str(updated_time)
                                         booking["message"] = updated_message.strip()
 
-                                        with json_file_bookings.open("w", encoding="utf-8") as f:
-                                            json.dump(bookings, f, indent=4)
+                                        save_json_list(json_file_bookings, bookings)
 
                                         st.success("Booking updated successfully!")
                                         st.session_state["edit_booking_id"] = None
@@ -1838,8 +1836,9 @@ def show_main_app_buyer():
                                 use_container_width=True
                             ):
                                 inquiries.remove(inquiry)
-                                with json_file_inquiries.open("w", encoding="utf-8") as f:
-                                    json.dump(inquiries, f, indent=4)
+
+                                save_json_list(json_file_inquiries, inquiries)
+
                                 st.success("Inquiry deleted successfully!")
                                 st.rerun()
 
@@ -1900,8 +1899,7 @@ def show_main_app_buyer():
                                         inquiry["subject"] = updated_subject
                                         inquiry["message"] = updated_question.strip()
 
-                                        with json_file_inquiries.open("w", encoding="utf-8") as f:
-                                            json.dump(inquiries, f, indent=4)
+                                        save_json_list(json_file_inquiries, inquiries)
 
                                         st.success("Inquiry updated successfully!")
                                         st.session_state["edit_inquiry_id"] = None
