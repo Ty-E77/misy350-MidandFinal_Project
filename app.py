@@ -1136,6 +1136,8 @@ def show_main_app_agent():
             st.session_state["page"] = "home"
             st.session_state["selected_agent_listing_id"] = None
             st.session_state["selected_other_listing_id"] = None
+            st.success("Logout Succesful")
+            time.sleep(0.5)
             st.rerun()
 
 
@@ -1939,6 +1941,8 @@ def show_main_app_buyer():
             st.session_state["page"] = "home"
             st.session_state["booking_listing_id"] = None
             st.session_state["selected_listing_id"] = None
+            st.success("Logout Succesful")
+            time.sleep(0.5)
             st.rerun()
 
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
