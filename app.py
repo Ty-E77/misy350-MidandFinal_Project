@@ -134,6 +134,194 @@ if "edit_booking_id" not in st.session_state:
 if "edit_inquiry_id" not in st.session_state:
     st.session_state["edit_inquiry_id"] = None
 
+# -- Chatbot Session States and functions --
+if "agent_chatbot" not in st.session_state:
+    st.session_state["agent_chatbot"] = [
+        {
+            "role": "assistant",
+            "content": "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
+        }
+    ]
+
+if "buyer_chatbot" not in st.session_state:
+    st.session_state["buyer_chatbot"] = [
+        {
+            "role": "assistant",
+            "content": "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
+        }
+    ]
+
+if "agent_chat_input_version" not in st.session_state:
+    st.session_state["agent_chat_input_version"] = 0
+
+if "buyer_chat_input_version" not in st.session_state:
+    st.session_state["buyer_chat_input_version"] = 0
+
+def get_agent_chatbot_response(user_input):
+    user_input = user_input.strip().lower()
+
+    if user_input == "how do i add a new listing?":
+        return "Go to the sidebar and click 'Add Property Listings'. Fill out the listing overview, property details, location, and contact information, then click 'Add Listing'."
+
+    elif user_input == "where do i manage my listings?":
+        return "Go to 'View/Manage Property Listings' in the sidebar. In the 'My Property Listings' tab, click 'Manage Listing' on any property to update or delete it."
+
+    elif user_input == "where do i view buyer requests?":
+        return "Go to 'Buyer Bookings & Inquiries' from the sidebar. There you can confirm or decline bookings and respond to buyer questions."
+
+    else:
+        return "I’m not sure about that yet. Try one of the suggested questions above."
+
+def get_buyer_chatbot_response(user_input):
+    user_input = user_input.strip().lower()
+
+    if user_input == "how do i browse listings?":
+        return "Go to the sidebar and click 'Browse Listings'. You can filter by property type and status, then click 'View Listing Details' for more information."
+
+    elif user_input == "how do i book an appointment?":
+        return "Open a property from 'Browse Listings', click 'Book an Appointment', complete the form, and submit it. Your request will appear under 'My Bookings & Inquiries'."
+
+    elif user_input == "how do i ask a question?":
+        return "Open a property from 'Browse Listings', click 'Ask a Question(s)', choose a subject, type your question, and submit it. You can later view the response in 'My Bookings & Inquiries'."
+
+    else:
+        return "I’m not sure about that yet. Try one of the suggested questions above."
+
+def show_chat_bot(role):
+    if role == "Agent":
+        chat_key = "agent_chatbot"
+        input_version_key = "agent_chat_input_version"
+        title = "### 🤖 Agent Assistant"
+        suggestions = [
+            "How do I add a new listing?",
+            "Where do I manage my listings?",
+            "Where do I view buyer requests?"
+        ]
+        default_message = "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
+    else:
+        chat_key = "buyer_chatbot"
+        input_version_key = "buyer_chat_input_version"
+        title = "### 🤖 Buyer Assistant"
+        suggestions = [
+            "How do I browse listings?",
+            "How do I book an appointment?",
+            "How do I ask a question?"
+        ]
+        default_message = "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
+
+    with st.container(border=True):
+        st.markdown(title)
+        st.caption("Choose a suggested question or type your own below.")
+
+        col1, col2, col3 = st.columns(3)
+
+        if col1.button(
+            suggestions[0],
+            key=f"{role.lower()}_chat_suggestion_btn_1",
+            use_container_width=True
+        ):
+            user_input = suggestions[0]
+            st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+            if role == "Agent":
+                response = get_agent_chatbot_response(user_input)
+            else:
+                response = get_buyer_chatbot_response(user_input)
+
+            st.session_state[chat_key].append({"role": "assistant", "content": response})
+            st.rerun()
+
+        if col2.button(
+            suggestions[1],
+            key=f"{role.lower()}_chat_suggestion_btn_2",
+            use_container_width=True
+        ):
+            user_input = suggestions[1]
+            st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+            if role == "Agent":
+                response = get_agent_chatbot_response(user_input)
+            else:
+                response = get_buyer_chatbot_response(user_input)
+
+            st.session_state[chat_key].append({"role": "assistant", "content": response})
+            st.rerun()
+
+        if col3.button(
+            suggestions[2],
+            key=f"{role.lower()}_chat_suggestion_btn_3",
+            use_container_width=True
+        ):
+            user_input = suggestions[2]
+            st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+            if role == "Agent":
+                response = get_agent_chatbot_response(user_input)
+            else:
+                response = get_buyer_chatbot_response(user_input)
+
+            st.session_state[chat_key].append({"role": "assistant", "content": response})
+            st.rerun()
+
+        st.divider()
+
+        with st.container(border=True, height=260):
+            for message in st.session_state[chat_key]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+        st.divider()
+
+        chat_input_key = f"{role.lower()}_chat_text_input_{st.session_state[input_version_key]}"
+
+        col_input, col_send = st.columns([4, 1])
+
+        with col_input:
+            user_input = st.text_input(
+                "Ask a question...",
+                key=chat_input_key,
+                label_visibility="collapsed",
+                placeholder="Ask a question..."
+            )
+
+        with col_send:
+            send_clicked = st.button(
+                "Send",
+                key=f"{role.lower()}_chat_send_btn",
+                type="primary",
+                use_container_width=True
+            )
+
+        if send_clicked:
+            user_input = user_input.strip()
+
+            if user_input:
+                st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+                if role == "Agent":
+                    response = get_agent_chatbot_response(user_input)
+                else:
+                    response = get_buyer_chatbot_response(user_input)
+
+                st.session_state[chat_key].append({"role": "assistant", "content": response})
+
+                st.session_state[input_version_key] += 1
+                st.rerun()
+
+        if st.button(
+            "Clear Chat",
+            key=f"{role.lower()}_chat_clear_bottom_btn",
+            use_container_width=True
+        ):
+            st.session_state[chat_key] = [
+                {
+                    "role": "assistant",
+                    "content": default_message
+                }
+            ]
+            st.session_state[input_version_key] += 1
+            st.rerun()
+
 # -- Creating registration & login page -- 
 def show_login_page():
     st.markdown("# Real Estate Finder")
@@ -335,6 +523,8 @@ def show_main_app_agent():
                 st.session_state["page"] = "buyer_inquiries"
                 st.rerun()
 
+        st.divider()
+        show_chat_bot("Agent")
         st.divider()
 
         # -- Recent activity -- 
@@ -1123,7 +1313,7 @@ def show_main_app_agent():
             st.session_state["page"] = "add_listings"
             st.rerun()
 
-        if st.button("➕ Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
+        if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
             st.session_state["page"] = "buyer_inquiries"
             st.rerun()
         
@@ -1209,6 +1399,8 @@ def show_main_app_buyer():
                 st.session_state["page"] = "my_inquiries"
                 st.rerun()
 
+        st.divider()
+        show_chat_bot("Buyer")
         st.divider()
 
         # -- Recent activity --
