@@ -210,16 +210,27 @@ def flush_rerun():
 
 
 def navigate_to(page, **extra_updates):
+    state_changed = st.session_state.get("page") != page
     st.session_state["page"] = page
+
     for state_key, state_value in extra_updates.items():
+        if st.session_state.get(state_key) != state_value:
+            state_changed = True
         st.session_state[state_key] = state_value
-    queue_rerun()
+
+    if state_changed:
+        queue_rerun()
 
 
 def update_state_and_rerun(**state_updates):
+    state_changed = False
     for state_key, state_value in state_updates.items():
+        if st.session_state.get(state_key) != state_value:
+            state_changed = True
         st.session_state[state_key] = state_value
-    queue_rerun()
+
+    if state_changed:
+        queue_rerun()
 
 
 def make_key(section, item_id, action):
@@ -939,38 +950,40 @@ def show_main_app_agent():
                     address = address.strip()
                     city = city.strip()
                     state = state.strip()
+                    edit_listing_errors = []
 
                     if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
-                        st.error("Please fill in all required fields.")
-                        st.stop()
+                        edit_listing_errors.append("Please fill in all required fields.")
 
                     if not is_valid_phone(contact_phone):
-                        st.error("Enter a valid 10-digit phone number.")
-                        st.stop()
+                        edit_listing_errors.append("Enter a valid 10-digit phone number.")
 
                     if not is_valid_email(contact_email):
-                        st.error("Enter a valid email address.")
-                        st.stop()
+                        edit_listing_errors.append("Enter a valid email address.")
 
-                    selected_listing["title"] = title
-                    selected_listing["description"] = description
-                    selected_listing["contact_name"] = contact_name
-                    selected_listing["contact_email"] = contact_email
-                    selected_listing["contact_phone"] = contact_phone
-                    selected_listing["address"] = address
-                    selected_listing["city"] = city
-                    selected_listing["state"] = state
-                    selected_listing["price"] = price
-                    selected_listing["bedrooms"] = bedrooms
-                    selected_listing["bathrooms"] = bathrooms
-                    selected_listing["property_sqft"] = property_sqft
-                    selected_listing["property_type"] = property_type
-                    selected_listing["status"] = status
+                    if edit_listing_errors:
+                        for edit_listing_error in edit_listing_errors:
+                            st.error(edit_listing_error)
+                    else:
+                        selected_listing["title"] = title
+                        selected_listing["description"] = description
+                        selected_listing["contact_name"] = contact_name
+                        selected_listing["contact_email"] = contact_email
+                        selected_listing["contact_phone"] = contact_phone
+                        selected_listing["address"] = address
+                        selected_listing["city"] = city
+                        selected_listing["state"] = state
+                        selected_listing["price"] = price
+                        selected_listing["bedrooms"] = bedrooms
+                        selected_listing["bathrooms"] = bathrooms
+                        selected_listing["property_sqft"] = property_sqft
+                        selected_listing["property_type"] = property_type
+                        selected_listing["status"] = status
 
-                    if save_json_list(json_file_properties, properties):
-                        st.success("Listing updated successfully!")
-                        time.sleep(0.5)
-                        navigate_to("manage_listing")
+                        if save_json_list(json_file_properties, properties):
+                            st.success("Listing updated successfully!")
+                            time.sleep(0.5)
+                            navigate_to("manage_listing")
 
             with col_cancel:
                 if st.button(
@@ -1106,18 +1119,16 @@ def show_main_app_agent():
                 city = city.strip()
                 state = state.strip()
                 contact_phone = normalize_phone(contact_phone)
+                add_listing_errors = []
 
             if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
-                st.error("Please fill in all required fields.")
-                st.stop()
+                add_listing_errors.append("Please fill in all required fields.")
 
             if not is_valid_phone(contact_phone):
-                st.error("Enter a valid 10-digit phone number.")
-                st.stop()
+                add_listing_errors.append("Enter a valid 10-digit phone number.")
 
             if not is_valid_email(contact_email):
-                st.error("Enter a valid email address.")
-                st.stop()
+                add_listing_errors.append("Enter a valid email address.")
 
             duplicate_listing = None
             for listing in properties:
@@ -1130,36 +1141,39 @@ def show_main_app_agent():
                     break
 
             if duplicate_listing:
-                st.error("A listing with this title and address already exists.")
-                st.stop()
+                add_listing_errors.append("A listing with this title and address already exists.")
 
-            new_listing = {
-                "id": str(uuid.uuid4()),
-                "agent_id": st.session_state["user"]["id"],
-                "title": title,
-                "description": description,
-                "address": address,
-                "city": city,
-                "state": state,
-                "price": price,
-                "bedrooms": bedrooms,
-                "bathrooms": bathrooms,
-                "property_sqft": property_sqft,
-                "property_type": property_type,
-                "status": status,
-                "contact_name": contact_name,
-                "contact_email": contact_email,
-                "contact_phone": contact_phone,
-                "listing_date": str(datetime.now())
-            }
+            if add_listing_errors:
+                for add_listing_error in add_listing_errors:
+                    st.error(add_listing_error)
+            else:
+                new_listing = {
+                    "id": str(uuid.uuid4()),
+                    "agent_id": st.session_state["user"]["id"],
+                    "title": title,
+                    "description": description,
+                    "address": address,
+                    "city": city,
+                    "state": state,
+                    "price": price,
+                    "bedrooms": bedrooms,
+                    "bathrooms": bathrooms,
+                    "property_sqft": property_sqft,
+                    "property_type": property_type,
+                    "status": status,
+                    "contact_name": contact_name,
+                    "contact_email": contact_email,
+                    "contact_phone": contact_phone,
+                    "listing_date": str(datetime.now())
+                }
 
-            properties.append(new_listing)
+                properties.append(new_listing)
 
-            if save_json_list(json_file_properties, properties):
-                st.success("Listing added successfully!")
-                st.balloons()
-                time.sleep(0.5)
-                navigate_to("properties_listings")
+                if save_json_list(json_file_properties, properties):
+                    st.success("Listing added successfully!")
+                    st.balloons()
+                    time.sleep(0.5)
+                    navigate_to("properties_listings")
 
     # -- Buyer bookings/inquiries Page -- 
     elif st.session_state["page"] == "buyer_inquiries":
@@ -1304,15 +1318,14 @@ def show_main_app_agent():
                                     ):
                                         if updated_status == "Answered" and not updated_response.strip():
                                             st.error("Please enter a response before marking as Answered.")
-                                            st.stop()
+                                        else:
+                                            inquiry["status"] = updated_status
+                                            inquiry["response"] = updated_response.strip()
+                                            inquiry["response_at"] = str(datetime.now()) if updated_response.strip() else ""
 
-                                        inquiry["status"] = updated_status
-                                        inquiry["response"] = updated_response.strip()
-                                        inquiry["response_at"] = str(datetime.now()) if updated_response.strip() else ""
-
-                                        if save_json_list(json_file_inquiries, inquiries):
-                                            st.success("Inquiry updated successfully!")
-                                            update_state_and_rerun(edit_agent_inquiry_id=None)
+                                            if save_json_list(json_file_inquiries, inquiries):
+                                                st.success("Inquiry updated successfully!")
+                                                update_state_and_rerun(edit_agent_inquiry_id=None)
 
                                 with col_cancel:
                                     if st.button(
@@ -1621,54 +1634,54 @@ def show_main_app_buyer():
                         appointment_email = normalize_email(appointment_email)
                         appointment_phone = normalize_phone(appointment_phone)
                         appointment_message = appointment_message.strip()
+                        appointment_errors = []
 
                         if not appointment_name or not appointment_email or not appointment_phone:
-                            st.error("Please fill in all required fields.")
-                            st.stop()
+                            appointment_errors.append("Please fill in all required fields.")
 
                         if not is_valid_phone(appointment_phone):
-                            st.error("Enter a valid 10-digit phone number.")
-                            st.stop()
+                            appointment_errors.append("Enter a valid 10-digit phone number.")
 
                         if not is_valid_email(appointment_email):
-                            st.error("Enter a valid email address.")
-                            st.stop()
+                            appointment_errors.append("Enter a valid email address.")
 
                         if appointment_type == "Select Type":
-                            st.error("Please select an appointment type.")
-                            st.stop()
+                            appointment_errors.append("Please select an appointment type.")
 
                         if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
-                            st.error("Appointments must be between 8:00 AM and 5:00 PM.")
-                            st.stop()
+                            appointment_errors.append("Appointments must be between 8:00 AM and 5:00 PM.")
 
-                        with st.spinner("Submitting appointment..."):
-                            time.sleep(0.5)
+                        if appointment_errors:
+                            for appointment_error in appointment_errors:
+                                st.error(appointment_error)
+                        else:
+                            with st.spinner("Submitting appointment..."):
+                                time.sleep(0.5)
 
-                            new_booking = {
-                                "id": str(uuid.uuid4()),
-                                "listing_id": selected_listing["id"],
-                                "property_title": selected_listing["title"],
-                                "agent_id": selected_listing["agent_id"],
-                                "buyer_id": st.session_state["user"]["id"],
-                                "buyer_name": appointment_name,
-                                "buyer_email": appointment_email,
-                                "buyer_phone": appointment_phone,
-                                "appointment_type": appointment_type,
-                                "appointment_date": str(appointment_date),
-                                "appointment_time": str(appointment_time),
-                                "message": appointment_message,
-                                "status": "Pending",
-                                "created_at": str(datetime.now())
-                            }
+                                new_booking = {
+                                    "id": str(uuid.uuid4()),
+                                    "listing_id": selected_listing["id"],
+                                    "property_title": selected_listing["title"],
+                                    "agent_id": selected_listing["agent_id"],
+                                    "buyer_id": st.session_state["user"]["id"],
+                                    "buyer_name": appointment_name,
+                                    "buyer_email": appointment_email,
+                                    "buyer_phone": appointment_phone,
+                                    "appointment_type": appointment_type,
+                                    "appointment_date": str(appointment_date),
+                                    "appointment_time": str(appointment_time),
+                                    "message": appointment_message,
+                                    "status": "Pending",
+                                    "created_at": str(datetime.now())
+                                }
 
-                            bookings.append(new_booking)
+                                bookings.append(new_booking)
 
-                            saved = save_json_list(json_file_bookings, bookings)
+                                saved = save_json_list(json_file_bookings, bookings)
 
-                        if saved:
-                            st.success("Appointment submitted successfully!")
-                            update_state_and_rerun(booking_listing_id=None)
+                            if saved:
+                                st.success("Appointment submitted successfully!")
+                                update_state_and_rerun(booking_listing_id=None)
 
             # -- Question Section -- 
             if st.session_state["question_listing_id"] == selected_listing["id"]:
@@ -1739,6 +1752,7 @@ def show_main_app_buyer():
                         question_phone = normalize_phone(question_phone)
                         question_subject = question_subject.strip()
                         question_message = question_message.strip()
+                        question_errors = []
 
                         if (
                             not question_name
@@ -1747,42 +1761,43 @@ def show_main_app_buyer():
                             or question_subject == "Select Subject"
                             or not question_message
                         ):
-                            st.error("Please fill in all required fields.")
-                            st.stop()                        
+                            question_errors.append("Please fill in all required fields.")
 
                         if not is_valid_phone(question_phone):
-                            st.error("Enter a valid 10-digit phone number.")
-                            st.stop()
+                            question_errors.append("Enter a valid 10-digit phone number.")
 
                         if not is_valid_email(question_email):
-                            st.error("Enter a valid email address.")
-                            st.stop()
+                            question_errors.append("Enter a valid email address.")
 
-                        with st.spinner("Submitting question..."):
-                            time.sleep(0.5)
+                        if question_errors:
+                            for question_error in question_errors:
+                                st.error(question_error)
+                        else:
+                            with st.spinner("Submitting question..."):
+                                time.sleep(0.5)
 
-                            new_inquiry = {
-                                "id": str(uuid.uuid4()),
-                                "listing_id": selected_listing["id"],
-                                "property_title": selected_listing["title"],
-                                "agent_id": selected_listing["agent_id"],
-                                "buyer_id": st.session_state["user"]["id"],
-                                "buyer_name": question_name,
-                                "buyer_email": question_email,
-                                "buyer_phone": question_phone,
-                                "subject": question_subject,
-                                "message": question_message,
-                                "status": "New",
-                                "created_at": str(datetime.now())
-                            }
+                                new_inquiry = {
+                                    "id": str(uuid.uuid4()),
+                                    "listing_id": selected_listing["id"],
+                                    "property_title": selected_listing["title"],
+                                    "agent_id": selected_listing["agent_id"],
+                                    "buyer_id": st.session_state["user"]["id"],
+                                    "buyer_name": question_name,
+                                    "buyer_email": question_email,
+                                    "buyer_phone": question_phone,
+                                    "subject": question_subject,
+                                    "message": question_message,
+                                    "status": "New",
+                                    "created_at": str(datetime.now())
+                                }
 
-                            inquiries.append(new_inquiry)
+                                inquiries.append(new_inquiry)
 
-                            saved = save_json_list(json_file_inquiries, inquiries)
+                                saved = save_json_list(json_file_inquiries, inquiries)
 
-                        if saved:
-                            st.success("Question submitted successfully!")
-                            update_state_and_rerun(question_listing_id=None)
+                            if saved:
+                                st.success("Question submitted successfully!")
+                                update_state_and_rerun(question_listing_id=None)
     
     # -- Booking & Inquiries Page --
     elif st.session_state["page"] == "my_inquiries":
@@ -1904,16 +1919,15 @@ def show_main_app_buyer():
                                     ):
                                         if updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
                                             st.error("Appointments must be between 8:00 AM and 5:00 PM.")
-                                            st.stop()
+                                        else:
+                                            booking["appointment_type"] = updated_type
+                                            booking["appointment_date"] = str(updated_date)
+                                            booking["appointment_time"] = str(updated_time)
+                                            booking["message"] = updated_message.strip()
 
-                                        booking["appointment_type"] = updated_type
-                                        booking["appointment_date"] = str(updated_date)
-                                        booking["appointment_time"] = str(updated_time)
-                                        booking["message"] = updated_message.strip()
-
-                                        if save_json_list(json_file_bookings, bookings):
-                                            st.success("Booking updated successfully!")
-                                            update_state_and_rerun(edit_booking_id=None)
+                                            if save_json_list(json_file_bookings, bookings):
+                                                st.success("Booking updated successfully!")
+                                                update_state_and_rerun(edit_booking_id=None)
 
                                 with col_cancel:
                                     if st.button(
@@ -2037,14 +2051,13 @@ def show_main_app_buyer():
                                     ):
                                         if not updated_question.strip():
                                             st.error("Question cannot be empty.")
-                                            st.stop()
+                                        else:
+                                            inquiry["subject"] = updated_subject
+                                            inquiry["message"] = updated_question.strip()
 
-                                        inquiry["subject"] = updated_subject
-                                        inquiry["message"] = updated_question.strip()
-
-                                        if save_json_list(json_file_inquiries, inquiries):
-                                            st.success("Inquiry updated successfully!")
-                                            update_state_and_rerun(edit_inquiry_id=None)
+                                            if save_json_list(json_file_inquiries, inquiries):
+                                                st.success("Inquiry updated successfully!")
+                                                update_state_and_rerun(edit_inquiry_id=None)
 
                                 with col_cancel:
                                     if st.button(
