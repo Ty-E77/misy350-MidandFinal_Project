@@ -14,6 +14,33 @@ st.set_page_config(page_title = "Real Estate Finder",
                    initial_sidebar_state = "expanded")
 
 
+def apply_base_styles():
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 1.25rem;
+                padding-bottom: 1.25rem;
+                max-width: 980px;
+            }
+            h1, h2, h3 {
+                letter-spacing: -0.01em;
+            }
+            div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]) {
+                gap: 0.7rem;
+            }
+            div[data-testid="stCaptionContainer"] p {
+                color: #6b7280;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+apply_base_styles()
+
+
 # -- Loading all json files, defining a valdation check for all json files, and setting defaults  -- 
 def load_json_list(file_path):
     if not file_path.exists():
@@ -151,11 +178,90 @@ if "buyer_chatbot" not in st.session_state:
         }
     ]
 
-if "agent_chat_input_version" not in st.session_state:
-    st.session_state["agent_chat_input_version"] = 0
+if "_queued_rerun" not in st.session_state:
+    st.session_state["_queued_rerun"] = False
 
-if "buyer_chat_input_version" not in st.session_state:
-    st.session_state["buyer_chat_input_version"] = 0
+
+def queue_rerun():
+    st.session_state["_queued_rerun"] = True
+
+
+def flush_rerun():
+    if st.session_state.get("_queued_rerun"):
+        st.session_state["_queued_rerun"] = False
+        st.rerun()
+
+
+def navigate_to(page, **extra_updates):
+    st.session_state["page"] = page
+    for state_key, state_value in extra_updates.items():
+        st.session_state[state_key] = state_value
+    queue_rerun()
+
+
+def find_listing_by_id(listing_id):
+    for property_item in properties:
+        if property_item["id"] == listing_id:
+            return property_item
+    return None
+
+
+def render_listing_detail_sections(selected_listing):
+    with st.container(border=True):
+        col_left, col_right = st.columns([3, 1])
+
+        with col_left:
+            st.markdown(f"### {selected_listing['title']}")
+            st.markdown(
+                f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
+            )
+
+        with col_right:
+            st.markdown(f"**Status:** {selected_listing['status']}")
+            st.markdown(f"### ${selected_listing['price']:,}")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        with st.container(border=True):
+            st.markdown("**Bedrooms**")
+            st.markdown(f"### {selected_listing['bedrooms']}")
+
+    with col2:
+        with st.container(border=True):
+            st.markdown("**Bathrooms**")
+            st.markdown(f"### {selected_listing['bathrooms']}")
+
+    with col3:
+        with st.container(border=True):
+            st.markdown("**Square Feet**")
+            st.markdown(f"### {selected_listing['property_sqft']}")
+
+    with col4:
+        with st.container(border=True):
+            st.markdown("**Property Type**")
+            st.markdown(f"### {selected_listing['property_type']}")
+
+    with st.container(border=True):
+        st.markdown("### Description")
+        st.markdown(selected_listing["description"])
+
+    with st.container(border=True):
+        st.markdown("### Contact Information")
+        st.markdown(f"**Name:** {selected_listing['contact_name']}")
+        st.markdown(f"**Email:** {selected_listing['contact_email']}")
+        st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
+
+
+def process_chat_message(role, chat_key, user_input):
+    st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+    if role == "Agent":
+        response = get_agent_chatbot_response(user_input)
+    else:
+        response = get_buyer_chatbot_response(user_input)
+
+    st.session_state[chat_key].append({"role": "assistant", "content": response})
 
 def get_agent_chatbot_response(user_input):
     user_input = user_input.strip().lower()
@@ -190,7 +296,6 @@ def get_buyer_chatbot_response(user_input):
 def show_chat_bot(role):
     if role == "Agent":
         chat_key = "agent_chatbot"
-        input_version_key = "agent_chat_input_version"
         title = "### 🤖 Agent Assistant"
         suggestions = [
             "How do I add a new listing?",
@@ -200,7 +305,6 @@ def show_chat_bot(role):
         default_message = "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
     else:
         chat_key = "buyer_chatbot"
-        input_version_key = "buyer_chat_input_version"
         title = "### 🤖 Buyer Assistant"
         suggestions = [
             "How do I browse listings?",
@@ -213,55 +317,15 @@ def show_chat_bot(role):
         st.markdown(title)
         st.caption("Choose a suggested question or type your own below.")
 
-        col1, col2, col3 = st.columns(3)
-
-        if col1.button(
-            suggestions[0],
-            key=f"{role.lower()}_chat_suggestion_btn_1",
-            use_container_width=True
-        ):
-            user_input = suggestions[0]
-            st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-            if role == "Agent":
-                response = get_agent_chatbot_response(user_input)
-            else:
-                response = get_buyer_chatbot_response(user_input)
-
-            st.session_state[chat_key].append({"role": "assistant", "content": response})
-            st.rerun()
-
-        if col2.button(
-            suggestions[1],
-            key=f"{role.lower()}_chat_suggestion_btn_2",
-            use_container_width=True
-        ):
-            user_input = suggestions[1]
-            st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-            if role == "Agent":
-                response = get_agent_chatbot_response(user_input)
-            else:
-                response = get_buyer_chatbot_response(user_input)
-
-            st.session_state[chat_key].append({"role": "assistant", "content": response})
-            st.rerun()
-
-        if col3.button(
-            suggestions[2],
-            key=f"{role.lower()}_chat_suggestion_btn_3",
-            use_container_width=True
-        ):
-            user_input = suggestions[2]
-            st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-            if role == "Agent":
-                response = get_agent_chatbot_response(user_input)
-            else:
-                response = get_buyer_chatbot_response(user_input)
-
-            st.session_state[chat_key].append({"role": "assistant", "content": response})
-            st.rerun()
+        for index, column in enumerate(st.columns(3), start=1):
+            suggestion = suggestions[index - 1]
+            if column.button(
+                suggestion,
+                key=f"{role.lower()}_chat_suggestion_btn_{index}",
+                use_container_width=True,
+            ):
+                process_chat_message(role, chat_key, suggestion)
+                queue_rerun()
 
         st.divider()
 
@@ -272,7 +336,7 @@ def show_chat_bot(role):
 
         st.divider()
 
-        chat_input_key = f"{role.lower()}_chat_text_input_{st.session_state[input_version_key]}"
+        chat_input_key = f"{role.lower()}_chat_text_input"
 
         col_input, col_send = st.columns([4, 1])
 
@@ -296,17 +360,9 @@ def show_chat_bot(role):
             user_input = user_input.strip()
 
             if user_input:
-                st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-                if role == "Agent":
-                    response = get_agent_chatbot_response(user_input)
-                else:
-                    response = get_buyer_chatbot_response(user_input)
-
-                st.session_state[chat_key].append({"role": "assistant", "content": response})
-
-                st.session_state[input_version_key] += 1
-                st.rerun()
+                process_chat_message(role, chat_key, user_input)
+                st.session_state[chat_input_key] = ""
+                queue_rerun()
 
         if st.button(
             "Clear Chat",
@@ -319,8 +375,8 @@ def show_chat_bot(role):
                     "content": default_message
                 }
             ]
-            st.session_state[input_version_key] += 1
-            st.rerun()
+            st.session_state[chat_input_key] = ""
+            queue_rerun()
 
 # -- Creating registration & login page -- 
 def show_login_page():
@@ -372,7 +428,7 @@ def show_login_page():
                     st.session_state["logged_in"] = True
                     st.session_state["user"] = login_check
                     st.session_state["page"] = "home"
-                    st.rerun()
+                    queue_rerun()
                 else:
                     st.error("Invalid email or password.")
 
@@ -440,6 +496,8 @@ def show_login_page():
                 save_json_list(json_file_users, users)
 
                 st.success("Account created successfully! You can now log in.")
+
+    flush_rerun()
 
 # -- Defining application for agent --                                 
 def show_main_app_agent():
@@ -510,18 +568,15 @@ def show_main_app_agent():
 
         with col_a:
             if st.button("View My Listings", key="agent_home_view_listings_btn", type="primary", use_container_width=True):
-                st.session_state["page"] = "properties_listings"
-                st.rerun()
+                navigate_to("properties_listings")
 
         with col_b:
             if st.button("Add New Listing", key="agent_home_add_listing_btn", use_container_width=True):
-                st.session_state["page"] = "add_listings"
-                st.rerun()
+                navigate_to("add_listings")
 
         with col_c:
             if st.button("View Buyer Requests", key="agent_home_buyer_requests_btn", use_container_width=True):
-                st.session_state["page"] = "buyer_inquiries"
-                st.rerun()
+                navigate_to("buyer_inquiries")
 
         st.divider()
         show_chat_bot("Agent")
@@ -622,9 +677,7 @@ def show_main_app_agent():
                             type="primary",
                             use_container_width=True
                         ):
-                            st.session_state["selected_agent_listing_id"] = listing["id"]
-                            st.session_state["page"] = "manage_listing"
-                            st.rerun()
+                            navigate_to("manage_listing", selected_agent_listing_id=listing["id"])
 
         with taball:
             st.markdown("### Other Agent Listings")
@@ -682,73 +735,18 @@ def show_main_app_agent():
                             type="primary",
                             use_container_width=True
                         ):
-                            st.session_state["selected_other_listing_id"] = listing["id"]
-                            st.session_state["page"] = "view_other_listing_details"
-                            st.rerun()
+                            navigate_to("view_other_listing_details", selected_other_listing_id=listing["id"])
 
     # -- Manage Listings Page --
     elif st.session_state["page"] == "manage_listing":
-        selected_listing = None
-
-        for property_item in properties:
-            if property_item["id"] == st.session_state["selected_agent_listing_id"]:
-                selected_listing = property_item
-                break
+        selected_listing = find_listing_by_id(st.session_state["selected_agent_listing_id"])
 
         if selected_listing is None:
             st.error("Listing not found.")
         else:
             st.markdown("## Manage Listing")
             st.divider()
-
-            # Summary Section
-            with st.container(border=True):
-                col_left, col_right = st.columns([3, 1])
-
-                with col_left:
-                    st.markdown(f"### {selected_listing['title']}")
-                    st.markdown(
-                        f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
-                    )
-
-                with col_right:
-                    st.markdown(f"**Status:** {selected_listing['status']}")
-                    st.markdown(f"### ${selected_listing['price']:,}")
-
-            # Facts Section
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                with st.container(border=True):
-                    st.markdown("**Bedrooms**")
-                    st.markdown(f"### {selected_listing['bedrooms']}")
-
-            with col2:
-                with st.container(border=True):
-                    st.markdown("**Bathrooms**")
-                    st.markdown(f"### {selected_listing['bathrooms']}")
-
-            with col3:
-                with st.container(border=True):
-                    st.markdown("**Square Feet**")
-                    st.markdown(f"### {selected_listing['property_sqft']}")
-
-            with col4:
-                with st.container(border=True):
-                    st.markdown("**Property Type**")
-                    st.markdown(f"### {selected_listing['property_type']}")
-
-            # Description
-            with st.container(border=True):
-                st.markdown("### Description")
-                st.markdown(selected_listing["description"])
-
-            # Contact
-            with st.container(border=True):
-                st.markdown("### Contact Information")
-                st.markdown(f"**Name:** {selected_listing['contact_name']}")
-                st.markdown(f"**Email:** {selected_listing['contact_email']}")
-                st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
+            render_listing_detail_sections(selected_listing)
 
             # Action buttons
             col_btn1, col_btn2, col_btn3 = st.columns(3)
@@ -760,8 +758,7 @@ def show_main_app_agent():
                     type="primary",
                     use_container_width=True
                 ):
-                    st.session_state["page"] = "edit_listing"
-                    st.rerun()
+                    navigate_to("edit_listing")
 
             with col_btn2:
                 if st.button(
@@ -775,9 +772,7 @@ def show_main_app_agent():
 
                     st.success("Listing deleted successfully!")
                     time.sleep(0.5)
-                    st.session_state["selected_agent_listing_id"] = None
-                    st.session_state["page"] = "properties_listings"
-                    st.rerun()
+                    navigate_to("properties_listings", selected_agent_listing_id=None)
 
             with col_btn3:
                 if st.button(
@@ -785,17 +780,11 @@ def show_main_app_agent():
                     key="back_to_my_listings",
                     use_container_width=True
                 ):
-                    st.session_state["page"] = "properties_listings"
-                    st.rerun()
+                    navigate_to("properties_listings")
 
     # -- Edit Listing Page -- 
     elif st.session_state["page"] == "edit_listing":
-        selected_listing = None
-
-        for property_item in properties:
-            if property_item["id"] == st.session_state["selected_agent_listing_id"]:
-                selected_listing = property_item
-                break
+        selected_listing = find_listing_by_id(st.session_state["selected_agent_listing_id"])
 
         if selected_listing is None:
             st.error("Listing not found.")
@@ -879,8 +868,7 @@ def show_main_app_agent():
 
                     st.success("Listing updated successfully!")
                     time.sleep(0.5)
-                    st.session_state["page"] = "manage_listing"
-                    st.rerun()
+                    navigate_to("manage_listing")
 
             with col_cancel:
                 if st.button(
@@ -888,81 +876,25 @@ def show_main_app_agent():
                     key=f"cancel_edit_listing_{selected_listing['id']}",
                     use_container_width=True
                 ):
-                    st.session_state["page"] = "manage_listing"
-                    st.rerun()
+                    navigate_to("manage_listing")
     
     # -- View Other Agents Listings
     elif st.session_state["page"] == "view_other_listing_details":
-        selected_listing = None
-
-        for property_item in properties:
-            if property_item["id"] == st.session_state["selected_other_listing_id"]:
-                selected_listing = property_item
-                break
+        selected_listing = find_listing_by_id(st.session_state["selected_other_listing_id"])
 
         if selected_listing is None:
             st.error("Listing not found.")
         else:
             st.markdown("## View Listing Details")
             st.divider()
-
-            # Summary Section
-            with st.container(border=True):
-                col_left, col_right = st.columns([3, 1])
-
-                with col_left:
-                    st.markdown(f"### {selected_listing['title']}")
-                    st.markdown(
-                        f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
-                    )
-
-                with col_right:
-                    st.markdown(f"**Status:** {selected_listing['status']}")
-                    st.markdown(f"### ${selected_listing['price']:,}")
-
-            # Facts Section
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                with st.container(border=True):
-                    st.markdown("**Bedrooms**")
-                    st.markdown(f"### {selected_listing['bedrooms']}")
-
-            with col2:
-                with st.container(border=True):
-                    st.markdown("**Bathrooms**")
-                    st.markdown(f"### {selected_listing['bathrooms']}")
-
-            with col3:
-                with st.container(border=True):
-                    st.markdown("**Square Feet**")
-                    st.markdown(f"### {selected_listing['property_sqft']}")
-
-            with col4:
-                with st.container(border=True):
-                    st.markdown("**Property Type**")
-                    st.markdown(f"### {selected_listing['property_type']}")
-
-            # Description
-            with st.container(border=True):
-                st.markdown("### Description")
-                st.markdown(selected_listing["description"])
-
-            # Contact Info
-            with st.container(border=True):
-                st.markdown("### Contact Information")
-                st.markdown(f"**Name:** {selected_listing['contact_name']}")
-                st.markdown(f"**Email:** {selected_listing['contact_email']}")
-                st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
+            render_listing_detail_sections(selected_listing)
 
             if st.button(
                 "Back to Other Listings",
                 key="back_to_other_agent_listings",
                 use_container_width=True
             ):
-                st.session_state["page"] = "properties_listings"
-                st.session_state["selected_other_listing_id"] = None
-                st.rerun()
+                navigate_to("properties_listings", selected_other_listing_id=None)
 
     # -- Add Listings Page --
     elif st.session_state["page"] == "add_listings":
@@ -1058,8 +990,7 @@ def show_main_app_agent():
             )
 
         if btn_cancel_listing:
-            st.session_state["page"] = "properties_listings"
-            st.rerun()
+            navigate_to("properties_listings")
 
         if btn_add_listing:
             with st.spinner("Listing is being created..."):
@@ -1127,8 +1058,7 @@ def show_main_app_agent():
             st.success("Listing added successfully!")
             st.balloons()
             time.sleep(0.5)
-            st.session_state["page"] = "properties_listings"
-            st.rerun()
+            navigate_to("properties_listings")
 
     # -- Buyer bookings/inquiries Page -- 
     elif st.session_state["page"] == "buyer_inquiries":
@@ -1188,7 +1118,7 @@ def show_main_app_agent():
                                 save_json_list(json_file_bookings, bookings)
 
                                 st.success("Appointment confirmed successfully!")
-                                st.rerun()
+                                queue_rerun()
 
                         with col2:
                             if st.button(
@@ -1201,7 +1131,7 @@ def show_main_app_agent():
                                 save_json_list(json_file_bookings, bookings)
 
                                 st.success("Appointment declined.")
-                                st.rerun()
+                                queue_rerun()
 
         # -- Inquiries Tab --
         with tab_inquiries:
@@ -1244,7 +1174,7 @@ def show_main_app_agent():
                             use_container_width=True
                         ):
                             st.session_state["edit_agent_inquiry_id"] = inquiry["id"]
-                            st.rerun()
+                            queue_rerun()
 
                         if st.session_state["edit_agent_inquiry_id"] == inquiry["id"]:
                             with st.container(border=True):
@@ -1286,7 +1216,7 @@ def show_main_app_agent():
 
                                         st.success("Inquiry updated successfully!")
                                         st.session_state["edit_agent_inquiry_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
 
                                 with col_cancel:
                                     if st.button(
@@ -1295,27 +1225,23 @@ def show_main_app_agent():
                                         use_container_width=True
                                     ):
                                         st.session_state["edit_agent_inquiry_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
     
     # -- Sidebar for navigating pages and logging out for agent -- 
     with st.sidebar:
         st.markdown("# **Navigator**")
 
         if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "home"
-            st.rerun()
+            navigate_to("home")
 
         if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "properties_listings"
-            st.rerun()
+            navigate_to("properties_listings")
 
         if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "add_listings"
-            st.rerun()
+            navigate_to("add_listings")
 
         if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "buyer_inquiries"
-            st.rerun()
+            navigate_to("buyer_inquiries")
         
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
@@ -1328,7 +1254,9 @@ def show_main_app_agent():
             st.session_state["selected_other_listing_id"] = None
             st.success("Logout Succesful")
             time.sleep(0.5)
-            st.rerun()
+            queue_rerun()
+
+    flush_rerun()
 
 
 # -- Defining application for buyer -- 
@@ -1391,13 +1319,11 @@ def show_main_app_buyer():
 
         with col_a:
             if st.button("Browse Listings", key="buyer_home_browse_btn", type="primary", use_container_width=True):
-                st.session_state["page"] = "browse_listings"
-                st.rerun()
+                navigate_to("browse_listings")
 
         with col_b:
             if st.button("View My Bookings & Inquiries", key="buyer_home_requests_btn", use_container_width=True):
-                st.session_state["page"] = "my_inquiries"
-                st.rerun()
+                navigate_to("my_inquiries")
 
         st.divider()
         show_chat_bot("Buyer")
@@ -1491,73 +1417,18 @@ def show_main_app_buyer():
                         type="primary",
                         use_container_width=True
                     ):
-                        st.session_state["selected_listing_id"] = listing["id"]
-                        st.session_state["page"] = "view_listing_details"
-                        st.rerun()
+                        navigate_to("view_listing_details", selected_listing_id=listing["id"])
 
     # -- Shows listing Details when a user clicks the listing -- 
     elif st.session_state["page"] == "view_listing_details":
-        selected_listing = None
-
-        for property_item in properties:
-            if property_item["id"] == st.session_state["selected_listing_id"]:
-                selected_listing = property_item
-                break
+        selected_listing = find_listing_by_id(st.session_state["selected_listing_id"])
 
         if selected_listing is None:
             st.error("Listing not found.")
         else:
             st.markdown("## View Listing Details")
             st.divider()
-
-            # -- Summary Section
-            with st.container(border=True):
-                col_left, col_right = st.columns([3, 1])
-
-                with col_left:
-                    st.markdown(f"### {selected_listing['title']}")
-                    st.markdown(
-                        f"**{selected_listing['address']}, {selected_listing['city']}, {selected_listing['state']}**"
-                    )
-
-                with col_right:
-                    st.markdown(f"**Status:** {selected_listing['status']}")
-                    st.markdown(f"### ${selected_listing['price']:,}")
-
-            # -- Facts Section -- 
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                with st.container(border=True):
-                    st.markdown("**Bedrooms**")
-                    st.markdown(f"### {selected_listing['bedrooms']}")
-
-            with col2:
-                with st.container(border=True):
-                    st.markdown("**Bathrooms**")
-                    st.markdown(f"### {selected_listing['bathrooms']}")
-
-            with col3:
-                with st.container(border=True):
-                    st.markdown("**Square Feet**")
-                    st.markdown(f"### {selected_listing['property_sqft']}")
-
-            with col4:
-                with st.container(border=True):
-                    st.markdown("**Property Type**")
-                    st.markdown(f"### {selected_listing['property_type']}")
-
-            # -- Description section --
-            with st.container(border=True):
-                st.markdown("### Description")
-                st.write(selected_listing["description"])
-
-            # -- Contact section --
-            with st.container(border=True):
-                st.markdown("### Contact Information")
-                st.write(f"**Name:** {selected_listing['contact_name']}")
-                st.write(f"**Email:** {selected_listing['contact_email']}")
-                st.write(f"**Phone:** {selected_listing['contact_phone']}")
+            render_listing_detail_sections(selected_listing)
 
             # -- Buttons --
             col_btn1, col_btn2, col_btn3 = st.columns(3)
@@ -1570,7 +1441,7 @@ def show_main_app_buyer():
                     use_container_width=True
                 ):
                     st.session_state["booking_listing_id"] = selected_listing["id"]
-                    st.rerun()
+                    queue_rerun()
 
             with col_btn2:
                 if st.button(
@@ -1579,13 +1450,11 @@ def show_main_app_buyer():
                     use_container_width=True
                 ):
                     st.session_state["question_listing_id"] = selected_listing["id"]
-                    st.rerun()
+                    queue_rerun()
 
             with col_btn3:
                 if st.button("Back to Listings", key="buyer_details_back_btn", use_container_width=True):
-                    st.session_state["page"] = "browse_listings"
-                    st.session_state["booking_listing_id"] = None
-                    st.rerun()
+                    navigate_to("browse_listings", booking_listing_id=None)
 
             # -- Booking Section -- 
             if st.session_state["booking_listing_id"] == selected_listing["id"]:
@@ -1657,7 +1526,7 @@ def show_main_app_buyer():
 
                     if btn_cancel_appointment:
                         st.session_state["booking_listing_id"] = None
-                        st.rerun()
+                        queue_rerun()
 
                     if btn_submit_appointment:
                         appointment_name = appointment_name.strip()
@@ -1711,7 +1580,7 @@ def show_main_app_buyer():
 
                         st.success("Appointment submitted successfully!")
                         st.session_state["booking_listing_id"] = None
-                        st.rerun()
+                        queue_rerun()
 
             # -- Question Section -- 
             if st.session_state["question_listing_id"] == selected_listing["id"]:
@@ -1775,7 +1644,7 @@ def show_main_app_buyer():
 
                     if btn_cancel_question:
                         st.session_state["question_listing_id"] = None
-                        st.rerun()
+                        queue_rerun()
 
                     if btn_submit_question:
                         question_name = question_name.strip()
@@ -1826,7 +1695,7 @@ def show_main_app_buyer():
 
                         st.success("Question submitted successfully!")
                         st.session_state["question_listing_id"] = None
-                        st.rerun()
+                        queue_rerun()
     
     # -- Booking & Inquiries Page --
     elif st.session_state["page"] == "my_inquiries":
@@ -1878,7 +1747,7 @@ def show_main_app_buyer():
                                 use_container_width=True
                             ):
                                 st.session_state["edit_booking_id"] = booking["id"]
-                                st.rerun()
+                                queue_rerun()
 
                         with col2:
                             if st.button(
@@ -1891,7 +1760,7 @@ def show_main_app_buyer():
                                 save_json_list(json_file_bookings, bookings)
 
                                 st.success("Booking deleted successfully!")
-                                st.rerun()
+                                queue_rerun()
 
                         if st.session_state["edit_booking_id"] == booking["id"]:
                             with st.container(border=True):
@@ -1961,7 +1830,7 @@ def show_main_app_buyer():
 
                                         st.success("Booking updated successfully!")
                                         st.session_state["edit_booking_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
 
                                 with col_cancel:
                                     if st.button(
@@ -1970,7 +1839,7 @@ def show_main_app_buyer():
                                         use_container_width=True
                                     ):
                                         st.session_state["edit_booking_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
         # -- Inquiries Tab --
         with tab_inquiries:
             my_inquiries = []
@@ -2021,7 +1890,7 @@ def show_main_app_buyer():
                                 use_container_width=True
                             ):
                                 st.session_state["edit_inquiry_id"] = inquiry["id"]
-                                st.rerun()
+                                queue_rerun()
 
                         with col2:
                             if st.button(
@@ -2034,7 +1903,7 @@ def show_main_app_buyer():
                                 save_json_list(json_file_inquiries, inquiries)
 
                                 st.success("Inquiry deleted successfully!")
-                                st.rerun()
+                                queue_rerun()
 
                         if st.session_state["edit_inquiry_id"] == inquiry["id"]:
                             with st.container(border=True):
@@ -2097,7 +1966,7 @@ def show_main_app_buyer():
 
                                         st.success("Inquiry updated successfully!")
                                         st.session_state["edit_inquiry_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
 
                                 with col_cancel:
                                     if st.button(
@@ -2106,23 +1975,20 @@ def show_main_app_buyer():
                                         use_container_width=True
                                     ):
                                         st.session_state["edit_inquiry_id"] = None
-                                        st.rerun()
+                                        queue_rerun()
                             
     # -- Sidebar for navigating pages and logging out for buyer -- 
     with st.sidebar:
         st.markdown("# **Navigator**")
 
         if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "home"
-            st.rerun()
+            navigate_to("home")
 
         if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "browse_listings"
-            st.rerun()
+            navigate_to("browse_listings")
 
         if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "my_inquiries"
-            st.rerun()
+            navigate_to("my_inquiries")
                 
         st.write(f"Logged in as: {st.session_state['user']['email']}")
         st.write(f"Role: {st.session_state['user']['role']}")
@@ -2135,7 +2001,9 @@ def show_main_app_buyer():
             st.session_state["selected_listing_id"] = None
             st.success("Logout Succesful")
             time.sleep(0.5)
-            st.rerun()
+            queue_rerun()
+
+    flush_rerun()
 
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
