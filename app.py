@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, time as dt_time
 import uuid
 import time
+import re
 
 # -- Setting page configuration --
 st.set_page_config(page_title = "Real Estate Finder", 
@@ -42,8 +43,12 @@ apply_base_styles()
 
 
 # -- Loading all json files, defining a valdation check for all json files, and setting defaults  -- 
-def load_json_list(file_path):
+data_load_warnings = []
+
+
+def load_json_list(file_path, label):
     if not file_path.exists():
+        data_load_warnings.append(f"{label}: file not found. Starting with empty data.")
         return []
 
     try:
@@ -53,9 +58,11 @@ def load_json_list(file_path):
         if isinstance(data, list):
             return data
         else:
+            data_load_warnings.append(f"{label}: invalid format (expected a list). Using empty data.")
             return []
 
     except (json.JSONDecodeError, OSError):
+        data_load_warnings.append(f"{label}: unreadable or malformed JSON. Using empty data.")
         return []
     
 def is_valid_user(user):
@@ -89,13 +96,13 @@ json_file_users = Path("users.json")
 json_file_inquiries = Path("inquiry.json")
 json_file_bookings = Path("bookings.json")
 
-users = load_json_list(json_file_users)
+users = load_json_list(json_file_users, "Users")
 users = [user for user in users if is_valid_user(user)]
 for user in users:
     user.setdefault("full_name", "")
     user.setdefault("role", "")
 
-properties = load_json_list(json_file_properties)
+properties = load_json_list(json_file_properties, "Properties")
 properties = [listing for listing in properties if is_valid_property(listing)]
 for listing in properties:
     listing.setdefault("status", "Available")
@@ -105,7 +112,7 @@ for listing in properties:
     listing.setdefault("contact_phone", "")
 
 
-inquiries = load_json_list(json_file_inquiries)
+inquiries = load_json_list(json_file_inquiries, "Inquiries")
 inquiries = [inquiry for inquiry in inquiries if is_valid_inquiry(inquiry)]
 for inquiry in inquiries:
     inquiry.setdefault("response", "")
@@ -114,7 +121,7 @@ for inquiry in inquiries:
     inquiry.setdefault("subject", "")
     inquiry.setdefault("message", "")
 
-bookings = load_json_list(json_file_bookings)
+bookings = load_json_list(json_file_bookings, "Bookings")
 bookings = [booking for booking in bookings if is_valid_booking(booking)]
 for booking in bookings:
     booking.setdefault("status", "Pending")
@@ -161,7 +168,7 @@ if "edit_booking_id" not in st.session_state:
 if "edit_inquiry_id" not in st.session_state:
     st.session_state["edit_inquiry_id"] = None
 
-# -- Chatbot Session States and functions --
+# -- Chatbot Session States
 if "agent_chatbot" not in st.session_state:
     st.session_state["agent_chatbot"] = [
         {
@@ -181,9 +188,10 @@ if "buyer_chatbot" not in st.session_state:
 if "_queued_rerun" not in st.session_state:
     st.session_state["_queued_rerun"] = False
 
-
+# -- More Functions for repetive tasks after learning on 4/6/2026 --
 def queue_rerun():
     st.session_state["_queued_rerun"] = True
+    flush_rerun()
 
 
 def flush_rerun():
@@ -197,6 +205,42 @@ def navigate_to(page, **extra_updates):
     for state_key, state_value in extra_updates.items():
         st.session_state[state_key] = state_value
     queue_rerun()
+
+
+def update_state_and_rerun(**state_updates):
+    for state_key, state_value in state_updates.items():
+        st.session_state[state_key] = state_value
+    queue_rerun()
+
+
+def make_key(section, item_id, action, index=None):
+    if index is None:
+        return f"{section}_{item_id}_{action}"
+    return f"{section}_{item_id}_{index}_{action}"
+
+
+def normalize_email(value):
+    return value.strip().lower()
+
+
+def is_valid_email(email):
+    pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+    return bool(re.match(pattern, email))
+
+
+def normalize_phone(phone):
+    return "".join(char for char in phone if char.isdigit())
+
+
+def is_valid_phone(phone):
+    return len(phone) == 10
+
+
+def show_data_warnings():
+    if data_load_warnings:
+        with st.expander("Data file warnings"):
+            for warning in data_load_warnings:
+                st.warning(warning)
 
 
 def find_listing_by_id(listing_id):
@@ -382,6 +426,7 @@ def show_chat_bot(role):
 def show_login_page():
     st.markdown("# Real Estate Finder")
     st.caption("Browse listings, book appointments, and connect with agents.")
+    show_data_warnings()
     st.divider()
 
     tab1, tab2 = st.tabs(["Log In", "Register"])
@@ -417,7 +462,11 @@ def show_login_page():
                     time.sleep(0.5)
 
                 login_check = None
-                email_login = email_login.strip().lower()
+                email_login = normalize_email(email_login)
+
+                if not is_valid_email(email_login):
+                    st.error("Please enter a valid email address.")
+                    st.stop()
 
                 for user in users:
                     if user["email"] == email_login and user["password"] == password_login:
@@ -425,10 +474,7 @@ def show_login_page():
                         break
 
                 if login_check:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user"] = login_check
-                    st.session_state["page"] = "home"
-                    queue_rerun()
+                    update_state_and_rerun(logged_in=True, user=login_check, page="home")
                 else:
                     st.error("Invalid email or password.")
 
@@ -468,7 +514,7 @@ def show_login_page():
                 with st.spinner("Creating account..."):
                     time.sleep(0.5)
 
-                new_email = email.strip().lower()
+                new_email = normalize_email(email)
                 existing_user = None
 
                 for user in users:
@@ -482,6 +528,10 @@ def show_login_page():
 
                 if not full_name or not new_email or not password:
                     st.error("Please fill in all required fields.")
+                    st.stop()
+
+                if not is_valid_email(new_email):
+                    st.error("Please enter a valid email address.")
                     st.stop()
 
                 users.append({
@@ -505,6 +555,7 @@ def show_main_app_agent():
     if st.session_state["page"] == "home":
         st.markdown(f"## Agent Dashboard - {st.session_state['user']['full_name']}")
         st.caption("Manage listings, review buyer bookings, and respond to inquiries.")
+        show_data_warnings()
         st.divider()
 
         # -- Calculate stats -- 
@@ -656,7 +707,7 @@ def show_main_app_agent():
             if not filtered_my_listings:
                 st.info("You have no listings matching these filters.")
             else:
-                for listing in filtered_my_listings:
+                for listing_index, listing in enumerate(filtered_my_listings):
                     with st.container(border=True):
                         col_title, col_space, col_price = st.columns([3, 1, 1])
 
@@ -673,7 +724,7 @@ def show_main_app_agent():
 
                         if st.button(
                             "Manage Listing",
-                            key=f"manage_listing_btn_{listing['id']}",
+                            key=make_key("agent_listing", listing["id"], "manage", listing_index),
                             type="primary",
                             use_container_width=True
                         ):
@@ -714,7 +765,7 @@ def show_main_app_agent():
             if not filtered_properties:
                 st.info("No listings match your filters.")
             else:
-                for listing in filtered_properties:
+                for listing_index, listing in enumerate(filtered_properties):
                     with st.container(border=True):
                         col_title, col_space, col_price = st.columns([3, 1, 1])
 
@@ -731,7 +782,7 @@ def show_main_app_agent():
 
                         if st.button(
                             "View Listing Details",
-                            key=f"view_other_listing_btn_{listing['id']}",
+                            key=make_key("other_listing", listing["id"], "view", listing_index),
                             type="primary",
                             use_container_width=True
                         ):
@@ -776,7 +827,7 @@ def show_main_app_agent():
 
             with col_btn3:
                 if st.button(
-                    "Back to My Listings",
+                    "← Back to My Listings",
                     key="back_to_my_listings",
                     use_container_width=True
                 ):
@@ -831,8 +882,8 @@ def show_main_app_agent():
                     title = title.strip()
                     description = description.strip()
                     contact_name = contact_name.strip()
-                    contact_email = contact_email.strip().lower()
-                    contact_phone = contact_phone.strip()
+                    contact_email = normalize_email(contact_email)
+                    contact_phone = normalize_phone(contact_phone)
                     address = address.strip()
                     city = city.strip()
                     state = state.strip()
@@ -841,11 +892,11 @@ def show_main_app_agent():
                         st.error("Please fill in all required fields.")
                         st.stop()
 
-                    if not contact_phone.isdigit() or len(contact_phone) != 10:
+                    if not is_valid_phone(contact_phone):
                         st.error("Enter a valid 10-digit phone number.")
                         st.stop()
 
-                    if "@" not in contact_email or "." not in contact_email:
+                    if not is_valid_email(contact_email):
                         st.error("Enter a valid email address.")
                         st.stop()
 
@@ -872,7 +923,7 @@ def show_main_app_agent():
 
             with col_cancel:
                 if st.button(
-                    "Cancel",
+                    "← Cancel",
                     key=f"cancel_edit_listing_{selected_listing['id']}",
                     use_container_width=True
                 ):
@@ -890,7 +941,7 @@ def show_main_app_agent():
             render_listing_detail_sections(selected_listing)
 
             if st.button(
-                "Back to Other Listings",
+                "← Back to Other Listings",
                 key="back_to_other_agent_listings",
                 use_container_width=True
             ):
@@ -984,7 +1035,7 @@ def show_main_app_agent():
 
         with col_btn2:
             btn_cancel_listing = st.button(
-                "Cancel",
+                "← Cancel",
                 key="agent_cancel_listing_submit_btn",
                 use_container_width=True
             )
@@ -999,21 +1050,21 @@ def show_main_app_agent():
                 title = title.strip()
                 description = description.strip()
                 contact_name = contact_name.strip()
-                contact_email = contact_email.strip().lower()
+                contact_email = normalize_email(contact_email)
                 address = address.strip()
                 city = city.strip()
                 state = state.strip()
-                contact_phone = contact_phone.strip()
+                contact_phone = normalize_phone(contact_phone)
 
             if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
                 st.error("Please fill in all required fields.")
                 st.stop()
 
-            if not contact_phone.isdigit() or len(contact_phone) != 10:
+            if not is_valid_phone(contact_phone):
                 st.error("Enter a valid 10-digit phone number.")
                 st.stop()
 
-            if "@" not in contact_email or "." not in contact_email:
+            if not is_valid_email(contact_email):
                 st.error("Enter a valid email address.")
                 st.stop()
 
@@ -1081,7 +1132,7 @@ def show_main_app_agent():
             if not agent_bookings:
                 st.info("You do not have any booking requests.")
             else:
-                for booking in agent_bookings:
+                for booking_index, booking in enumerate(agent_bookings):
                     with st.container(border=True):
                         col_left, col_right = st.columns([3, 1])
 
@@ -1109,7 +1160,7 @@ def show_main_app_agent():
                         with col1:
                             if st.button(
                                 "Confirm Appointment",
-                                key=f"confirm_booking_{booking['id']}",
+                                key=make_key("agent_booking", booking["id"], "confirm", booking_index),
                                 type="primary",
                                 use_container_width=True
                             ):
@@ -1123,7 +1174,7 @@ def show_main_app_agent():
                         with col2:
                             if st.button(
                                 "Decline Appointment",
-                                key=f"decline_booking_{booking['id']}",
+                                key=make_key("agent_booking", booking["id"], "decline", booking_index),
                                 use_container_width=True
                             ):
                                 booking["status"] = "Declined"
@@ -1147,7 +1198,7 @@ def show_main_app_agent():
             if not agent_inquiries:
                 st.info("You do not have any buyer inquiries.")
             else:
-                for inquiry in agent_inquiries:
+                for inquiry_index, inquiry in enumerate(agent_inquiries):
                     with st.container(border=True):
                         col_left, col_right = st.columns([3, 1])
 
@@ -1170,11 +1221,10 @@ def show_main_app_agent():
 
                         if st.button(
                             "Respond to Inquiry",
-                            key=f"edit_agent_inquiry_{inquiry['id']}",
+                            key=make_key("agent_inquiry", inquiry["id"], "edit", inquiry_index),
                             use_container_width=True
                         ):
-                            st.session_state["edit_agent_inquiry_id"] = inquiry["id"]
-                            queue_rerun()
+                            update_state_and_rerun(edit_agent_inquiry_id=inquiry["id"])
 
                         if st.session_state["edit_agent_inquiry_id"] == inquiry["id"]:
                             with st.container(border=True):
@@ -1185,14 +1235,14 @@ def show_main_app_agent():
                                     ["New", "In Progress", "Answered"],
                                     index=["New", "In Progress", "Answered"].index(inquiry["status"])
                                     if inquiry["status"] in ["New", "In Progress", "Answered"] else 0,
-                                    key=f"agent_inquiry_status_{inquiry['id']}"
+                                    key=make_key("agent_inquiry", inquiry["id"], "status", inquiry_index)
                                 )
 
                                 updated_response = st.text_area(
                                     "Response to Buyer",
                                     value=inquiry.get("response", ""),
                                     placeholder="Type your answer here",
-                                    key=f"agent_inquiry_response_{inquiry['id']}"
+                                    key=make_key("agent_inquiry", inquiry["id"], "response", inquiry_index)
                                 )
 
                                 col_save, col_cancel = st.columns(2)
@@ -1200,7 +1250,7 @@ def show_main_app_agent():
                                 with col_save:
                                     if st.button(
                                         "Save Response",
-                                        key=f"save_agent_inquiry_{inquiry['id']}",
+                                        key=make_key("agent_inquiry", inquiry["id"], "save", inquiry_index),
                                         type="primary",
                                         use_container_width=True
                                     ):
@@ -1215,17 +1265,15 @@ def show_main_app_agent():
                                         save_json_list(json_file_inquiries, inquiries)
 
                                         st.success("Inquiry updated successfully!")
-                                        st.session_state["edit_agent_inquiry_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_agent_inquiry_id=None)
 
                                 with col_cancel:
                                     if st.button(
-                                        "Cancel",
-                                        key=f"cancel_agent_inquiry_{inquiry['id']}",
+                                        "← Cancel",
+                                        key=make_key("agent_inquiry", inquiry["id"], "cancel", inquiry_index),
                                         use_container_width=True
                                     ):
-                                        st.session_state["edit_agent_inquiry_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_agent_inquiry_id=None)
     
     # -- Sidebar for navigating pages and logging out for agent -- 
     with st.sidebar:
@@ -1265,6 +1313,7 @@ def show_main_app_buyer():
     if st.session_state["page"] == "home":
         st.markdown(f"## Buyer Dashboard - {st.session_state['user']['full_name']}")
         st.caption("Browse listings, book appointments, and manage your inquiries.")
+        show_data_warnings()
         st.divider()
 
         # -- Calculate stats --
@@ -1399,7 +1448,7 @@ def show_main_app_buyer():
         if not filtered_properties:
             st.info("No listings match your filters.")
         else:
-            for listing in filtered_properties:
+            for listing_index, listing in enumerate(filtered_properties):
                 with st.container(border=True):
                     cola, colspace, colp = st.columns([3,1,1])
                     with cola:
@@ -1413,7 +1462,7 @@ def show_main_app_buyer():
 
                     if st.button(
                         "View Listing Details",
-                        key=f"view_listing_btn_{listing['id']}",
+                        key=make_key("buyer_listing", listing["id"], "view", listing_index),
                         type="primary",
                         use_container_width=True
                     ):
@@ -1440,8 +1489,7 @@ def show_main_app_buyer():
                     type="primary",
                     use_container_width=True
                 ):
-                    st.session_state["booking_listing_id"] = selected_listing["id"]
-                    queue_rerun()
+                    update_state_and_rerun(booking_listing_id=selected_listing["id"])
 
             with col_btn2:
                 if st.button(
@@ -1449,11 +1497,10 @@ def show_main_app_buyer():
                     key=f"details_question_{selected_listing['id']}",
                     use_container_width=True
                 ):
-                    st.session_state["question_listing_id"] = selected_listing["id"]
-                    queue_rerun()
+                    update_state_and_rerun(question_listing_id=selected_listing["id"])
 
             with col_btn3:
-                if st.button("Back to Listings", key="buyer_details_back_btn", use_container_width=True):
+                if st.button("← Back to Listings", key="buyer_details_back_btn", use_container_width=True):
                     navigate_to("browse_listings", booking_listing_id=None)
 
             # -- Booking Section -- 
@@ -1519,30 +1566,29 @@ def show_main_app_buyer():
 
                     with col_cancel:
                         btn_cancel_appointment = st.button(
-                            "Cancel",
+                            "← Cancel",
                             key=f"cancel_appointment_{selected_listing['id']}",
                             use_container_width=True
                         )
 
                     if btn_cancel_appointment:
-                        st.session_state["booking_listing_id"] = None
-                        queue_rerun()
+                        update_state_and_rerun(booking_listing_id=None)
 
                     if btn_submit_appointment:
                         appointment_name = appointment_name.strip()
-                        appointment_email = appointment_email.strip().lower()
-                        appointment_phone = appointment_phone.strip()
+                        appointment_email = normalize_email(appointment_email)
+                        appointment_phone = normalize_phone(appointment_phone)
                         appointment_message = appointment_message.strip()
 
                         if not appointment_name or not appointment_email or not appointment_phone:
                             st.error("Please fill in all required fields.")
                             st.stop()
 
-                        if not appointment_phone.isdigit() or len(appointment_phone) != 10:
+                        if not is_valid_phone(appointment_phone):
                             st.error("Enter a valid 10-digit phone number.")
                             st.stop()
 
-                        if "@" not in appointment_email or "." not in appointment_email:
+                        if not is_valid_email(appointment_email):
                             st.error("Enter a valid email address.")
                             st.stop()
 
@@ -1579,8 +1625,7 @@ def show_main_app_buyer():
                             save_json_list(json_file_bookings, bookings)
 
                         st.success("Appointment submitted successfully!")
-                        st.session_state["booking_listing_id"] = None
-                        queue_rerun()
+                        update_state_and_rerun(booking_listing_id=None)
 
             # -- Question Section -- 
             if st.session_state["question_listing_id"] == selected_listing["id"]:
@@ -1637,19 +1682,18 @@ def show_main_app_buyer():
 
                     with col_cancel_q:
                         btn_cancel_question = st.button(
-                            "Cancel",
+                            "← Cancel",
                             key=f"cancel_question_{selected_listing['id']}",
                             use_container_width=True
                         )
 
                     if btn_cancel_question:
-                        st.session_state["question_listing_id"] = None
-                        queue_rerun()
+                        update_state_and_rerun(question_listing_id=None)
 
                     if btn_submit_question:
                         question_name = question_name.strip()
-                        question_email = question_email.strip().lower()
-                        question_phone = question_phone.strip()
+                        question_email = normalize_email(question_email)
+                        question_phone = normalize_phone(question_phone)
                         question_subject = question_subject.strip()
                         question_message = question_message.strip()
 
@@ -1663,11 +1707,11 @@ def show_main_app_buyer():
                             st.error("Please fill in all required fields.")
                             st.stop()                        
 
-                        if not question_phone.isdigit() or len(question_phone) != 10:
+                        if not is_valid_phone(question_phone):
                             st.error("Enter a valid 10-digit phone number.")
                             st.stop()
 
-                        if "@" not in question_email or "." not in question_email:
+                        if not is_valid_email(question_email):
                             st.error("Enter a valid email address.")
                             st.stop()
 
@@ -1694,8 +1738,7 @@ def show_main_app_buyer():
                             save_json_list(json_file_inquiries, inquiries)
 
                         st.success("Question submitted successfully!")
-                        st.session_state["question_listing_id"] = None
-                        queue_rerun()
+                        update_state_and_rerun(question_listing_id=None)
     
     # -- Booking & Inquiries Page --
     elif st.session_state["page"] == "my_inquiries":
@@ -1718,7 +1761,7 @@ def show_main_app_buyer():
             if not my_bookings:
                 st.info("You have not made any bookings yet.")
             else:
-                for booking in my_bookings:
+                for booking_index, booking in enumerate(my_bookings):
                     with st.container(border=True):
                         col_left, col_right = st.columns([3, 1])
 
@@ -1743,16 +1786,15 @@ def show_main_app_buyer():
                         with col1:
                             if st.button(
                                 "Update Booking",
-                                key=f"edit_booking_{booking['id']}",
+                                key=make_key("buyer_booking", booking["id"], "edit", booking_index),
                                 use_container_width=True
                             ):
-                                st.session_state["edit_booking_id"] = booking["id"]
-                                queue_rerun()
+                                update_state_and_rerun(edit_booking_id=booking["id"])
 
                         with col2:
                             if st.button(
                                 "Delete Booking",
-                                key=f"delete_booking_{booking['id']}",
+                                key=make_key("buyer_booking", booking["id"], "delete", booking_index),
                                 use_container_width=True
                             ):
                                 bookings.remove(booking)
@@ -1782,19 +1824,19 @@ def show_main_app_buyer():
                                         "Initial Consultation",
                                         "Offer Discussion"
                                     ] else 0,
-                                    key=f"updated_type_{booking['id']}"
+                                    key=make_key("buyer_booking", booking["id"], "updated_type", booking_index)
                                 )
 
                                 updated_date = st.date_input(
                                     "Preferred Appointment Date",
                                     value=datetime.strptime(booking["appointment_date"], "%Y-%m-%d").date(),
-                                    key=f"updated_date_{booking['id']}"
+                                    key=make_key("buyer_booking", booking["id"], "updated_date", booking_index)
                                 )
 
                                 updated_time = st.time_input(
                                     "Preferred Appointment Time",
                                     value=datetime.strptime(booking["appointment_time"], "%H:%M:%S").time(),
-                                    key=f"updated_time_{booking['id']}"
+                                    key=make_key("buyer_booking", booking["id"], "updated_time", booking_index)
                                 )
 
                                 st.markdown(
@@ -1805,7 +1847,7 @@ def show_main_app_buyer():
                                 updated_message = st.text_area(
                                     "Notes",
                                     value=booking["message"],
-                                    key=f"updated_message_{booking['id']}"
+                                    key=make_key("buyer_booking", booking["id"], "updated_message", booking_index)
                                 )
 
                                 col_save, col_cancel = st.columns(2)
@@ -1813,7 +1855,7 @@ def show_main_app_buyer():
                                 with col_save:
                                     if st.button(
                                         "Save Changes",
-                                        key=f"save_booking_{booking['id']}",
+                                        key=make_key("buyer_booking", booking["id"], "save", booking_index),
                                         type="primary",
                                         use_container_width=True
                                     ):
@@ -1829,17 +1871,15 @@ def show_main_app_buyer():
                                         save_json_list(json_file_bookings, bookings)
 
                                         st.success("Booking updated successfully!")
-                                        st.session_state["edit_booking_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_booking_id=None)
 
                                 with col_cancel:
                                     if st.button(
-                                        "Cancel",
-                                        key=f"cancel_edit_booking_{booking['id']}",
+                                        "← Cancel",
+                                        key=make_key("buyer_booking", booking["id"], "cancel", booking_index),
                                         use_container_width=True
                                     ):
-                                        st.session_state["edit_booking_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_booking_id=None)
         # -- Inquiries Tab --
         with tab_inquiries:
             my_inquiries = []
@@ -1854,7 +1894,7 @@ def show_main_app_buyer():
             if not my_inquiries:
                 st.info("You have not submitted any inquiries yet.")
             else:
-                for inquiry in my_inquiries:
+                for inquiry_index, inquiry in enumerate(my_inquiries):
                     with st.container(border=True):
                         col_left, col_right = st.columns([3, 1])
 
@@ -1886,16 +1926,15 @@ def show_main_app_buyer():
                         with col1:
                             if st.button(
                                 "Update Inquiry",
-                                key=f"edit_inquiry_{inquiry['id']}",
+                                key=make_key("buyer_inquiry", inquiry["id"], "edit", inquiry_index),
                                 use_container_width=True
                             ):
-                                st.session_state["edit_inquiry_id"] = inquiry["id"]
-                                queue_rerun()
+                                update_state_and_rerun(edit_inquiry_id=inquiry["id"])
 
                         with col2:
                             if st.button(
                                 "Delete Inquiry",
-                                key=f"delete_inquiry_{inquiry['id']}",
+                                key=make_key("buyer_inquiry", inquiry["id"], "delete", inquiry_index),
                                 use_container_width=True
                             ):
                                 inquiries.remove(inquiry)
@@ -1937,13 +1976,13 @@ def show_main_app_buyer():
                                         "Make an Offer",
                                         "Other"
                                     ] else 0,
-                                    key=f"updated_subject_{inquiry['id']}"
+                                    key=make_key("buyer_inquiry", inquiry["id"], "subject", inquiry_index)
                                 )
 
                                 updated_question = st.text_area(
                                     "Question",
                                     value=inquiry["message"],
-                                    key=f"updated_question_{inquiry['id']}"
+                                    key=make_key("buyer_inquiry", inquiry["id"], "question", inquiry_index)
                                 )
 
                                 col_save, col_cancel = st.columns(2)
@@ -1951,7 +1990,7 @@ def show_main_app_buyer():
                                 with col_save:
                                     if st.button(
                                         "Save Changes",
-                                        key=f"save_inquiry_{inquiry['id']}",
+                                        key=make_key("buyer_inquiry", inquiry["id"], "save", inquiry_index),
                                         type="primary",
                                         use_container_width=True
                                     ):
@@ -1965,17 +2004,15 @@ def show_main_app_buyer():
                                         save_json_list(json_file_inquiries, inquiries)
 
                                         st.success("Inquiry updated successfully!")
-                                        st.session_state["edit_inquiry_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_inquiry_id=None)
 
                                 with col_cancel:
                                     if st.button(
-                                        "Cancel",
-                                        key=f"cancel_edit_inquiry_{inquiry['id']}",
+                                        "← Cancel",
+                                        key=make_key("buyer_inquiry", inquiry["id"], "cancel", inquiry_index),
                                         use_container_width=True
                                     ):
-                                        st.session_state["edit_inquiry_id"] = None
-                                        queue_rerun()
+                                        update_state_and_rerun(edit_inquiry_id=None)
                             
     # -- Sidebar for navigating pages and logging out for buyer -- 
     with st.sidebar:
