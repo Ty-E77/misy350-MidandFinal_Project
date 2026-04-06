@@ -7,6 +7,7 @@ from datetime import datetime, time as dt_time
 import uuid
 import time
 import re
+import hashlib
 
 # -- Setting page configuration --
 st.set_page_config(page_title = "Real Estate Finder", 
@@ -131,8 +132,12 @@ for booking in bookings:
 def save_json_list(file_path, data):
     for attempt in range(3):
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
+            temp_file_path = file_path.with_suffix(file_path.suffix + ".tmp")
+
+            with open(temp_file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
+
+            temp_file_path.replace(file_path)
             return True
         except (OSError, TypeError, ValueError) as exc:
             if attempt == 2:
@@ -140,6 +145,38 @@ def save_json_list(file_path, data):
                 st.warning("Please try again. Your current form inputs are still on screen.")
                 return False
             time.sleep(0.2)
+
+
+def hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def verify_password(stored_password, entered_password):
+    entered_hash = hash_password(entered_password)
+    return stored_password == entered_password or stored_password == entered_hash
+
+
+def delete_record_with_rollback(collection, record, file_path):
+    record_index = collection.index(record)
+    collection.pop(record_index)
+
+    if save_json_list(file_path, collection):
+        return True
+
+    collection.insert(record_index, record)
+    return False
+
+
+def update_record_with_rollback(record, updates, collection, file_path):
+    previous_values = record.copy()
+    record.update(updates)
+
+    if save_json_list(file_path, collection):
+        return True
+
+    record.clear()
+    record.update(previous_values)
+    return False
 
 # -- Session state defaults -- 
 if "logged_in" not in st.session_state:
@@ -529,7 +566,7 @@ def show_login_page():
                         time.sleep(0.5)
 
                     for user in users:
-                        if user["email"] == email_login and user["password"] == password_login:
+                        if user["email"] == email_login and verify_password(user["password"], password_login):
                             login_check = user
                             break
 
@@ -603,13 +640,15 @@ def show_login_page():
                         "id": str(uuid.uuid4()),
                         "email": new_email,
                         "full_name": full_name.strip(),
-                        "password": password,
+                        "password": hash_password(password),
                         "role": role,
                         "registered_at": str(datetime.now())
                     })
                     
                     if save_json_list(json_file_users, users):
                         st.success("Account created successfully! You can now log in.")
+                    else:
+                        users.pop()
 
     flush_rerun()
 
@@ -881,9 +920,7 @@ def show_main_app_agent():
                     key=f"delete_listing_{selected_listing['id']}",
                     use_container_width=True
                 ):
-                    properties.remove(selected_listing)
-
-                    if save_json_list(json_file_properties, properties):
+                    if delete_record_with_rollback(properties, selected_listing, json_file_properties):
                         st.success("Listing deleted successfully!")
                         time.sleep(0.5)
                         navigate_to("properties_listings", selected_agent_listing_id=None)
@@ -965,22 +1002,24 @@ def show_main_app_agent():
                         for edit_listing_error in edit_listing_errors:
                             st.error(edit_listing_error)
                     else:
-                        selected_listing["title"] = title
-                        selected_listing["description"] = description
-                        selected_listing["contact_name"] = contact_name
-                        selected_listing["contact_email"] = contact_email
-                        selected_listing["contact_phone"] = contact_phone
-                        selected_listing["address"] = address
-                        selected_listing["city"] = city
-                        selected_listing["state"] = state
-                        selected_listing["price"] = price
-                        selected_listing["bedrooms"] = bedrooms
-                        selected_listing["bathrooms"] = bathrooms
-                        selected_listing["property_sqft"] = property_sqft
-                        selected_listing["property_type"] = property_type
-                        selected_listing["status"] = status
+                        updated_listing_values = {
+                            "title": title,
+                            "description": description,
+                            "contact_name": contact_name,
+                            "contact_email": contact_email,
+                            "contact_phone": contact_phone,
+                            "address": address,
+                            "city": city,
+                            "state": state,
+                            "price": price,
+                            "bedrooms": bedrooms,
+                            "bathrooms": bathrooms,
+                            "property_sqft": property_sqft,
+                            "property_type": property_type,
+                            "status": status,
+                        }
 
-                        if save_json_list(json_file_properties, properties):
+                        if update_record_with_rollback(selected_listing, updated_listing_values, properties, json_file_properties):
                             st.success("Listing updated successfully!")
                             time.sleep(0.5)
                             navigate_to("manage_listing")
@@ -1174,6 +1213,8 @@ def show_main_app_agent():
                     st.balloons()
                     time.sleep(0.5)
                     navigate_to("properties_listings")
+                else:
+                    properties.pop()
 
     # -- Buyer bookings/inquiries Page -- 
     elif st.session_state["page"] == "buyer_inquiries":
@@ -1228,9 +1269,7 @@ def show_main_app_agent():
                                 type="primary",
                                 use_container_width=True
                             ):
-                                booking["status"] = "Confirmed"
-
-                                if save_json_list(json_file_bookings, bookings):
+                                if update_record_with_rollback(booking, {"status": "Confirmed"}, bookings, json_file_bookings):
                                     st.success("Appointment confirmed successfully!")
                                     queue_rerun()
 
@@ -1240,9 +1279,7 @@ def show_main_app_agent():
                                 key=make_key("agent_booking", booking["id"], "decline"),
                                 use_container_width=True
                             ):
-                                booking["status"] = "Declined"
-
-                                if save_json_list(json_file_bookings, bookings):
+                                if update_record_with_rollback(booking, {"status": "Declined"}, bookings, json_file_bookings):
                                     st.success("Appointment declined.")
                                     queue_rerun()
 
@@ -1319,11 +1356,13 @@ def show_main_app_agent():
                                         if updated_status == "Answered" and not updated_response.strip():
                                             st.error("Please enter a response before marking as Answered.")
                                         else:
-                                            inquiry["status"] = updated_status
-                                            inquiry["response"] = updated_response.strip()
-                                            inquiry["response_at"] = str(datetime.now()) if updated_response.strip() else ""
+                                            updated_inquiry_values = {
+                                                "status": updated_status,
+                                                "response": updated_response.strip(),
+                                                "response_at": str(datetime.now()) if updated_response.strip() else "",
+                                            }
 
-                                            if save_json_list(json_file_inquiries, inquiries):
+                                            if update_record_with_rollback(inquiry, updated_inquiry_values, inquiries, json_file_inquiries):
                                                 st.success("Inquiry updated successfully!")
                                                 update_state_and_rerun(edit_agent_inquiry_id=None)
 
@@ -1678,6 +1717,8 @@ def show_main_app_buyer():
                                 bookings.append(new_booking)
 
                                 saved = save_json_list(json_file_bookings, bookings)
+                                if not saved:
+                                    bookings.pop()
 
                             if saved:
                                 st.success("Appointment submitted successfully!")
@@ -1794,6 +1835,8 @@ def show_main_app_buyer():
                                 inquiries.append(new_inquiry)
 
                                 saved = save_json_list(json_file_inquiries, inquiries)
+                                if not saved:
+                                    inquiries.pop()
 
                             if saved:
                                 st.success("Question submitted successfully!")
@@ -1856,9 +1899,7 @@ def show_main_app_buyer():
                                 key=make_key("buyer_booking", booking["id"], "delete"),
                                 use_container_width=True
                             ):
-                                bookings.remove(booking)
-
-                                if save_json_list(json_file_bookings, bookings):
+                                if delete_record_with_rollback(bookings, booking, json_file_bookings):
                                     st.success("Booking deleted successfully!")
                                     queue_rerun()
 
@@ -1920,12 +1961,14 @@ def show_main_app_buyer():
                                         if updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
                                             st.error("Appointments must be between 8:00 AM and 5:00 PM.")
                                         else:
-                                            booking["appointment_type"] = updated_type
-                                            booking["appointment_date"] = str(updated_date)
-                                            booking["appointment_time"] = str(updated_time)
-                                            booking["message"] = updated_message.strip()
+                                            updated_booking_values = {
+                                                "appointment_type": updated_type,
+                                                "appointment_date": str(updated_date),
+                                                "appointment_time": str(updated_time),
+                                                "message": updated_message.strip(),
+                                            }
 
-                                            if save_json_list(json_file_bookings, bookings):
+                                            if update_record_with_rollback(booking, updated_booking_values, bookings, json_file_bookings):
                                                 st.success("Booking updated successfully!")
                                                 update_state_and_rerun(edit_booking_id=None)
 
@@ -1993,9 +2036,7 @@ def show_main_app_buyer():
                                 key=make_key("buyer_inquiry", inquiry["id"], "delete"),
                                 use_container_width=True
                             ):
-                                inquiries.remove(inquiry)
-
-                                if save_json_list(json_file_inquiries, inquiries):
+                                if delete_record_with_rollback(inquiries, inquiry, json_file_inquiries):
                                     st.success("Inquiry deleted successfully!")
                                     queue_rerun()
 
@@ -2052,10 +2093,12 @@ def show_main_app_buyer():
                                         if not updated_question.strip():
                                             st.error("Question cannot be empty.")
                                         else:
-                                            inquiry["subject"] = updated_subject
-                                            inquiry["message"] = updated_question.strip()
+                                            updated_inquiry_values = {
+                                                "subject": updated_subject,
+                                                "message": updated_question.strip(),
+                                            }
 
-                                            if save_json_list(json_file_inquiries, inquiries):
+                                            if update_record_with_rollback(inquiry, updated_inquiry_values, inquiries, json_file_inquiries):
                                                 st.success("Inquiry updated successfully!")
                                                 update_state_and_rerun(edit_inquiry_id=None)
 
