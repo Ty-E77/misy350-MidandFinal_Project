@@ -3,7 +3,7 @@
 # ============================================================
 
 # -- Importing necessary packages --
-# breadcrumb
+# breadcrumb(check it out)
 import streamlit as st
 import json
 from pathlib import Path
@@ -19,9 +19,58 @@ st.set_page_config(page_title = "Real Estate Finder",
                    layout = "centered",
                    initial_sidebar_state = "expanded")
 
-
-# -- Loading all json files, defining a valdation check for all json files, and setting defaults  -- 
+# -- Loading all json files, defining a validation check for all json files, and setting defaults --
 data_load_warnings = []
+
+# -- Shared Constants Messages --
+USER_ROLE_OPTIONS = ["Agent", "Buyer"]
+PROPERTY_TYPE_OPTIONS = ["House", "Apartment", "Condo", "Townhouse"]
+LISTING_STATUS_OPTIONS = ["Available", "Pending", "Sold"]
+ALL_PROPERTY_TYPE_OPTIONS = ["All", *PROPERTY_TYPE_OPTIONS]
+ALL_LISTING_STATUS_OPTIONS = ["All", *LISTING_STATUS_OPTIONS]
+BROWSE_STATUS_OPTIONS = ["All", "Available", "Pending"]
+OPEN_LISTING_STATUSES = ["Available", "Pending"]
+APPOINTMENT_TYPE_OPTIONS = [
+    "Property Walkthrough",
+    "Initial Consultation",
+    "Offer Discussion",
+]
+APPOINTMENT_TYPE_SELECT_OPTIONS = ["Select Type", *APPOINTMENT_TYPE_OPTIONS]
+INQUIRY_SUBJECT_OPTIONS = [
+    "Property Availability",
+    "Schedule a Tour",
+    "Pricing Information",
+    "Financing Questions",
+    "Property Details",
+    "Make an Offer",
+    "Other",
+]
+INQUIRY_SUBJECT_SELECT_OPTIONS = ["Select Subject", *INQUIRY_SUBJECT_OPTIONS]
+INQUIRY_RESPONSE_STATUS_OPTIONS = ["New", "In Progress", "Answered"]
+
+REQUIRED_FIELDS_MESSAGE = "Please fill in all required fields."
+INVALID_EMAIL_MESSAGE = "Enter a valid email address."
+INVALID_PHONE_MESSAGE = "Enter a valid 10-digit phone number."
+PAST_APPOINTMENT_DATE_MESSAGE = "Appointment date cannot be in the past."
+APPOINTMENT_TIME_WINDOW_MESSAGE = "Appointments must be between 8:00 AM and 5:00 PM."
+ANSWER_RESPONSE_REQUIRED_MESSAGE = "Please enter a response before marking as Answered."
+
+AGENT_CHATBOT_DEFAULT_MESSAGE = (
+    "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
+)
+BUYER_CHATBOT_DEFAULT_MESSAGE = (
+    "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
+)
+AGENT_CHAT_SUGGESTIONS = [
+    "How do I add a new listing?",
+    "Where do I manage my listings?",
+    "Where do I view buyer requests?",
+]
+BUYER_CHAT_SUGGESTIONS = [
+    "How do I browse listings?",
+    "How do I book an appointment?",
+    "How do I ask a question?",
+]
 
 def load_json_list(file_path, label):
     if not file_path.exists():
@@ -88,7 +137,6 @@ for listing in properties:
     listing.setdefault("contact_email", "")
     listing.setdefault("contact_phone", "")
 
-
 inquiries = load_json_list(json_file_inquiries, "Inquiries")
 inquiries = [inquiry for inquiry in inquiries if is_valid_inquiry(inquiry)]
 for inquiry in inquiries:
@@ -103,7 +151,6 @@ bookings = [booking for booking in bookings if is_valid_booking(booking)]
 for booking in bookings:
     booking.setdefault("status", "Pending")
     booking.setdefault("message", "")
-
 
 # ============================================================
 # -- Service Layer --
@@ -127,15 +174,12 @@ def save_json_list(file_path, data):
                 return False
             time.sleep(0.2)
 
-
 def hash_password(password):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
 
 def verify_password(stored_password, entered_password):
     entered_hash = hash_password(entered_password)
     return stored_password == entered_password or stored_password == entered_hash
-
 
 def delete_record_with_rollback(collection, record, file_path):
     record_index = collection.index(record)
@@ -146,7 +190,6 @@ def delete_record_with_rollback(collection, record, file_path):
 
     collection.insert(record_index, record)
     return False
-
 
 def update_record_with_rollback(record, updates, collection, file_path):
     previous_values = record.copy()
@@ -159,7 +202,6 @@ def update_record_with_rollback(record, updates, collection, file_path):
     record.update(previous_values)
     return False
 
-
 def parse_date_safe(value, default_value):
     if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
         return value
@@ -169,7 +211,6 @@ def parse_date_safe(value, default_value):
         except ValueError:
             return default_value
     return default_value
-
 
 def parse_time_safe(value, default_value):
     if hasattr(value, "hour") and hasattr(value, "minute"):
@@ -184,7 +225,6 @@ def parse_time_safe(value, default_value):
                 continue
 
     return default_value
-
 
 def parse_datetime_safe(value):
     if isinstance(value, datetime):
@@ -214,7 +254,6 @@ def parse_datetime_safe(value):
 
     return datetime.min
 
-
 def get_record_timestamp(record, *field_names):
     for field_name in field_names:
         if field_name in record:
@@ -222,7 +261,6 @@ def get_record_timestamp(record, *field_names):
             if parsed_value != datetime.min:
                 return parsed_value
     return datetime.min
-
 
 def reset_state_for_logout():
     return {
@@ -239,13 +277,11 @@ def reset_state_for_logout():
         "edit_inquiry_id": None,
     }
 
-
 def find_listing_by_id(listing_id):
     for property_item in properties:
         if property_item["id"] == listing_id:
             return property_item
     return None
-
 
 def process_chat_message(role, chat_key, user_input):
     st.session_state[chat_key].append({"role": "user", "content": user_input})
@@ -257,7 +293,6 @@ def process_chat_message(role, chat_key, user_input):
 
     st.session_state[chat_key].append({"role": "assistant", "content": response})
 
-
 def submit_chat_message(role, chat_key, chat_input_key):
     user_input = st.session_state.get(chat_input_key, "").strip()
 
@@ -265,7 +300,6 @@ def submit_chat_message(role, chat_key, chat_input_key):
         process_chat_message(role, chat_key, user_input)
         st.session_state[chat_input_key] = ""
         queue_rerun()
-
 
 def clear_chat_messages(chat_key, chat_input_key, default_message):
     st.session_state[chat_key] = [
@@ -317,82 +351,67 @@ def update_state_and_rerun(**state_updates):
     if state_changed:
         queue_rerun()
 
-
 def make_key(section, item_id, action):
     return f"{section}_{item_id}_{action}"
 
-
 def normalize_email(value):
     return value.strip().lower()
-
 
 def is_valid_email(email):
     pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
     return bool(re.match(pattern, email))
 
-
 def normalize_phone(phone):
     return "".join(char for char in phone if char.isdigit())
-
 
 def is_valid_phone(phone):
     return len(phone) == 10
 
-# -- Session state defaults -- 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
 
-if "user" not in st.session_state:
-    st.session_state["user"] = None
+def get_option_index(options, value):
+    return options.index(value) if value in options else 0
 
-if "page" not in st.session_state:
-    st.session_state["page"] = "home"
 
-# -- Agent Session States --
-if "selected_agent_listing_id" not in st.session_state:
-    st.session_state["selected_agent_listing_id"] = None
+def append_required_fields_error(error_list, *values):
+    if any(not isinstance(v, (int, float)) and not v for v in values):
+        error_list.append(REQUIRED_FIELDS_MESSAGE)
 
-if "selected_other_listing_id" not in st.session_state:
-    st.session_state["selected_other_listing_id"] = None
 
-if "edit_agent_inquiry_id" not in st.session_state:
-    st.session_state["edit_agent_inquiry_id"] = None
+def append_contact_validation_errors(error_list, email, phone):
+    if not is_valid_phone(phone):
+        error_list.append(INVALID_PHONE_MESSAGE)
 
-# -- Buyer Session States -- 
-if "booking_listing_id" not in st.session_state:
-    st.session_state["booking_listing_id"] = None
+    if not is_valid_email(email):
+        error_list.append(INVALID_EMAIL_MESSAGE)
 
-if "selected_listing_id" not in st.session_state:
-    st.session_state["selected_listing_id"] = None
+# -- Session State Defaults --
+SESSION_STATE_DEFAULTS = {
+    "logged_in": False,
+    "user": None,
+    "page": "home",
+    "selected_agent_listing_id": None,
+    "selected_other_listing_id": None,
+    "edit_agent_inquiry_id": None,
+    "booking_listing_id": None,
+    "selected_listing_id": None,
+    "question_listing_id": None,
+    "edit_booking_id": None,
+    "edit_inquiry_id": None,
+    "_queued_rerun": False,
+}
 
-if "question_listing_id" not in st.session_state:
-    st.session_state["question_listing_id"] = None
+for state_key, default_value in SESSION_STATE_DEFAULTS.items():
+    st.session_state.setdefault(state_key, default_value)
 
-if "edit_booking_id" not in st.session_state:
-    st.session_state["edit_booking_id"] = None
+# -- Chatbot Session States --
+CHATBOT_DEFAULTS = {
+    "agent_chatbot": [{"role": "assistant", "content": AGENT_CHATBOT_DEFAULT_MESSAGE}],
+    "buyer_chatbot": [{"role": "assistant", "content": BUYER_CHATBOT_DEFAULT_MESSAGE}],
+}
 
-if "edit_inquiry_id" not in st.session_state:
-    st.session_state["edit_inquiry_id"] = None
-
-# -- Chatbot Session States
-if "agent_chatbot" not in st.session_state:
-    st.session_state["agent_chatbot"] = [
-        {
-            "role": "assistant",
-            "content": "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
-        }
-    ]
-
-if "buyer_chatbot" not in st.session_state:
-    st.session_state["buyer_chatbot"] = [
-        {
-            "role": "assistant",
-            "content": "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
-        }
-    ]
-
-if "_queued_rerun" not in st.session_state:
-    st.session_state["_queued_rerun"] = False
+for chatbot_key, default_messages in CHATBOT_DEFAULTS.items():
+    if chatbot_key not in st.session_state:
+        st.session_state[chatbot_key] = [message.copy() for message in default_messages]
 
 # ============================================================
 # -- UI Layer --
@@ -422,9 +441,7 @@ def apply_base_styles():
         unsafe_allow_html=True,
     )
 
-
 apply_base_styles()
-
 
 def queue_rerun():
     if not st.session_state.get("_queued_rerun"):
@@ -503,21 +520,13 @@ def show_chat_bot(role):
     if role == "Agent":
         chat_key = "agent_chatbot"
         title = "### 🤖 Agent Assistant"
-        suggestions = [
-            "How do I add a new listing?",
-            "Where do I manage my listings?",
-            "Where do I view buyer requests?"
-        ]
-        default_message = "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
+        suggestions = AGENT_CHAT_SUGGESTIONS
+        default_message = AGENT_CHATBOT_DEFAULT_MESSAGE
     else:
         chat_key = "buyer_chatbot"
         title = "### 🤖 Buyer Assistant"
-        suggestions = [
-            "How do I browse listings?",
-            "How do I book an appointment?",
-            "How do I ask a question?"
-        ]
-        default_message = "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
+        suggestions = BUYER_CHAT_SUGGESTIONS
+        default_message = BUYER_CHATBOT_DEFAULT_MESSAGE
 
     with st.container(border=True):
         st.markdown(title)
@@ -549,7 +558,7 @@ def show_chat_bot(role):
         col_input, col_send = st.columns([4, 1])
 
         with col_input:
-            user_input = st.text_input(
+            st.text_input(
                 "Ask a question...",
                 key=chat_input_key,
                 label_visibility="collapsed",
@@ -566,14 +575,13 @@ def show_chat_bot(role):
                 args=(role, chat_key, chat_input_key)
             )
 
-        if st.button(
+        st.button(
             "Clear Chat",
             key=f"{role.lower()}_chat_clear_bottom_btn",
             use_container_width=True,
             on_click=clear_chat_messages,
             args=(chat_key, chat_input_key, default_message)
-        ):
-            pass
+        )
 
 # -- Creating registration & login page -- 
 def show_login_page():
@@ -615,7 +623,7 @@ def show_login_page():
                     login_errors.append("Please enter your email and password.")
 
                 if email_login and not is_valid_email(email_login):
-                    login_errors.append("Please enter a valid email address.")
+                    login_errors.append(INVALID_EMAIL_MESSAGE)
 
                 if not login_errors:
                     with st.spinner("Verifying credentials..."):
@@ -655,7 +663,7 @@ def show_login_page():
             )
             role = st.selectbox(
                 "Role",
-                ["Agent", "Buyer"],
+                USER_ROLE_OPTIONS,
                 key="role_new"
             )
 
@@ -683,10 +691,10 @@ def show_login_page():
                     register_errors.append("An account with this email already exists.")
 
                 if not full_name or not new_email or not password:
-                    register_errors.append("Please fill in all required fields.")
+                    register_errors.append(REQUIRED_FIELDS_MESSAGE)
 
                 if not is_valid_email(new_email):
-                    register_errors.append("Please enter a valid email address.")
+                    register_errors.append(INVALID_EMAIL_MESSAGE)
 
                 if register_errors:
                     for register_error in register_errors:
@@ -855,13 +863,13 @@ def show_main_app_agent():
 
                 selected_type_my = st.selectbox(
                     "Property Type",
-                    ["All", "House", "Apartment", "Condo", "Townhouse"],
+                    ALL_PROPERTY_TYPE_OPTIONS,
                     key="my_type_filter"
                 )
 
                 selected_status_my = st.selectbox(
                     "Status",
-                    ["All", "Available", "Pending", "Sold"],
+                    ALL_LISTING_STATUS_OPTIONS,
                     key="my_status_filter"
                 )
 
@@ -880,7 +888,7 @@ def show_main_app_agent():
             else:
                 for listing in filtered_my_listings:
                     with st.container(border=True):
-                        col_title, col_space, col_price = st.columns([3, 1, 1])
+                        col_title, _, col_price = st.columns([3, 1, 1])
 
                         with col_title:
                             st.markdown(f"### {listing['title']}")
@@ -909,13 +917,13 @@ def show_main_app_agent():
 
                 selected_type = st.selectbox(
                     "Property Type",
-                    ["All", "House", "Apartment", "Condo", "Townhouse"],
+                    ALL_PROPERTY_TYPE_OPTIONS,
                     key="all_type_filter"
                 )
 
                 selected_status = st.selectbox(
                     "Status",
-                    ["All", "Available", "Pending", "Sold"],
+                    ALL_LISTING_STATUS_OPTIONS,
                     key="all_status_filter"
                 )
 
@@ -938,7 +946,7 @@ def show_main_app_agent():
             else:
                 for listing in filtered_properties:
                     with st.container(border=True):
-                        col_title, col_space, col_price = st.columns([3, 1, 1])
+                        col_title, _, col_price = st.columns([3, 1, 1])
 
                         with col_title:
                             st.markdown(f"### {listing['title']}")
@@ -1026,20 +1034,16 @@ def show_main_app_agent():
             bathrooms = st.number_input("Bathrooms", min_value=0, step=1, value=int(selected_listing["bathrooms"]))
             property_sqft = st.number_input("Property Square Footage", min_value=1, step=1, value=int(selected_listing["property_sqft"]))
 
-            property_type_options = ["House", "Apartment", "Condo", "Townhouse"]
             property_type = st.selectbox(
                 "Property Type",
-                property_type_options,
-                index=property_type_options.index(selected_listing["property_type"])
-                if selected_listing["property_type"] in property_type_options else 0
+                PROPERTY_TYPE_OPTIONS,
+                index=get_option_index(PROPERTY_TYPE_OPTIONS, selected_listing["property_type"])
             )
 
-            status_options = ["Available", "Pending", "Sold"]
             status = st.selectbox(
                 "Status",
-                status_options,
-                index=status_options.index(selected_listing["status"])
-                if selected_listing["status"] in status_options else 0
+                LISTING_STATUS_OPTIONS,
+                index=get_option_index(LISTING_STATUS_OPTIONS, selected_listing["status"])
             )
 
             col_save, col_cancel = st.columns(2)
@@ -1061,14 +1065,17 @@ def show_main_app_agent():
                     state = state.strip()
                     edit_listing_errors = []
 
-                    if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
-                        edit_listing_errors.append("Please fill in all required fields.")
-
-                    if not is_valid_phone(contact_phone):
-                        edit_listing_errors.append("Enter a valid 10-digit phone number.")
-
-                    if not is_valid_email(contact_email):
-                        edit_listing_errors.append("Enter a valid email address.")
+                    append_required_fields_error(
+                        edit_listing_errors,
+                        title,
+                        address,
+                        city,
+                        state,
+                        contact_name,
+                        contact_email,
+                        contact_phone,
+                    )
+                    append_contact_validation_errors(edit_listing_errors, contact_email, contact_phone)
 
                     if edit_listing_errors:
                         for edit_listing_error in edit_listing_errors:
@@ -1149,7 +1156,7 @@ def show_main_app_agent():
             with col1:
                 property_type = st.selectbox(
                     "Property Type",
-                    ["House", "Apartment", "Condo", "Townhouse"]
+                    PROPERTY_TYPE_OPTIONS
                 )
                 price = st.number_input("Price", min_value=1)
                 bedrooms = st.number_input("Bedrooms", min_value=0, step=1)
@@ -1157,7 +1164,7 @@ def show_main_app_agent():
             with col2:
                 status = st.selectbox(
                     "Status",
-                    ["Available", "Pending", "Sold"]
+                    LISTING_STATUS_OPTIONS
                 )
                 bathrooms = st.number_input("Bathrooms", min_value=0, step=1)
                 property_sqft = st.number_input("Property Square Footage", min_value=1, step=1)
@@ -1232,14 +1239,17 @@ def show_main_app_agent():
                 contact_phone = normalize_phone(contact_phone)
                 add_listing_errors = []
 
-            if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
-                add_listing_errors.append("Please fill in all required fields.")
-
-            if not is_valid_phone(contact_phone):
-                add_listing_errors.append("Enter a valid 10-digit phone number.")
-
-            if not is_valid_email(contact_email):
-                add_listing_errors.append("Enter a valid email address.")
+            append_required_fields_error(
+                add_listing_errors,
+                title,
+                address,
+                city,
+                state,
+                contact_name,
+                contact_email,
+                contact_phone,
+            )
+            append_contact_validation_errors(add_listing_errors, contact_email, contact_phone)
 
             duplicate_listing = None
             for listing in properties:
@@ -1405,9 +1415,8 @@ def show_main_app_agent():
 
                                 updated_status = st.selectbox(
                                     "Status",
-                                    ["New", "In Progress", "Answered"],
-                                    index=["New", "In Progress", "Answered"].index(inquiry["status"])
-                                    if inquiry["status"] in ["New", "In Progress", "Answered"] else 0,
+                                    INQUIRY_RESPONSE_STATUS_OPTIONS,
+                                    index=get_option_index(INQUIRY_RESPONSE_STATUS_OPTIONS, inquiry["status"]),
                                     key=make_key("agent_inquiry", inquiry["id"], "status")
                                 )
 
@@ -1428,7 +1437,7 @@ def show_main_app_agent():
                                         use_container_width=True
                                     ):
                                         if updated_status == "Answered" and not updated_response.strip():
-                                            st.error("Please enter a response before marking as Answered.")
+                                            st.error(ANSWER_RESPONSE_REQUIRED_MESSAGE)
                                         else:
                                             updated_inquiry_values = {
                                                 "status": updated_status,
@@ -1474,7 +1483,6 @@ def show_main_app_agent():
 
     flush_rerun()
 
-
 # -- Defining application for buyer -- 
 def show_main_app_buyer():
     # -- Dashboard Page --
@@ -1491,7 +1499,7 @@ def show_main_app_buyer():
         pending_bookings = 0
 
         for listing in properties:
-            if listing["status"] in ["Available", "Pending"]:
+            if listing["status"] in OPEN_LISTING_STATUSES:
                 available_listings += 1
 
         for booking in bookings:
@@ -1594,13 +1602,13 @@ def show_main_app_buyer():
 
             selected_type = st.selectbox(
                 "Property Type",
-                ["All", "House", "Apartment", "Condo", "Townhouse"],
+                ALL_PROPERTY_TYPE_OPTIONS,
                 key="buyer_type_filter"
             )
 
             selected_status = st.selectbox(
                 "Status",
-                ["All", "Available", "Pending"],
+                BROWSE_STATUS_OPTIONS,
                 key="buyer_status_filter"
             )
 
@@ -1624,7 +1632,7 @@ def show_main_app_buyer():
         else:
             for listing in filtered_properties:
                 with st.container(border=True):
-                    cola, colspace, colp = st.columns([3,1,1])
+                    cola, _, colp = st.columns([3,1,1])
                     with cola:
                         st.markdown(f"### {listing['title']}")
                     with colp:
@@ -1701,12 +1709,7 @@ def show_main_app_buyer():
 
                     appointment_type = st.selectbox(
                         "Appointment Type",
-                        [
-                            "Select Type",
-                            "Property Walkthrough",
-                            "Initial Consultation",
-                            "Offer Discussion"
-                        ],
+                        APPOINTMENT_TYPE_SELECT_OPTIONS,
                         key=f"appointment_type_{selected_listing['id']}"
                     )
 
@@ -1716,12 +1719,14 @@ def show_main_app_buyer():
                         key=f"appointment_date_{selected_listing['id']}"
                     )
 
-                    appointment_time = st.time_input("Preferred Appointment Time", key = f"appointment_time_{selected_listing['id']}"
+                    appointment_time = st.time_input(
+                        "Preferred Appointment Time",
+                        key=f"appointment_time_{selected_listing['id']}"
                     )
 
-                    # -- Show in 12-hour format for the buyer -- 
+                    # -- Show in 12-hour format for the buyer --
                     st.write("Selected Time:", appointment_time.strftime("%I:%M %p"))
-                    st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+                    st.caption(APPOINTMENT_TIME_WINDOW_MESSAGE)
 
                     appointment_message = st.text_area(
                         "Notes (Optional)",
@@ -1756,23 +1761,26 @@ def show_main_app_buyer():
                         appointment_message = appointment_message.strip()
                         appointment_errors = []
 
-                        if not appointment_name or not appointment_email or not appointment_phone:
-                            appointment_errors.append("Please fill in all required fields.")
-
-                        if not is_valid_phone(appointment_phone):
-                            appointment_errors.append("Enter a valid 10-digit phone number.")
-
-                        if not is_valid_email(appointment_email):
-                            appointment_errors.append("Enter a valid email address.")
+                        append_required_fields_error(
+                            appointment_errors,
+                            appointment_name,
+                            appointment_email,
+                            appointment_phone,
+                        )
+                        append_contact_validation_errors(
+                            appointment_errors,
+                            appointment_email,
+                            appointment_phone,
+                        )
 
                         if appointment_type == "Select Type":
                             appointment_errors.append("Please select an appointment type.")
 
                         if appointment_date < datetime.now().date():
-                            appointment_errors.append("Appointment date cannot be in the past.")
+                            appointment_errors.append(PAST_APPOINTMENT_DATE_MESSAGE)
 
                         if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
-                            appointment_errors.append("Appointments must be between 8:00 AM and 5:00 PM.")
+                            appointment_errors.append(APPOINTMENT_TIME_WINDOW_MESSAGE)
 
                         if appointment_errors:
                             for appointment_error in appointment_errors:
@@ -1832,16 +1840,7 @@ def show_main_app_buyer():
 
                     question_subject = st.selectbox(
                         "Subject",
-                        [
-                            "Select Subject",
-                            "Property Availability",
-                            "Schedule a Tour",
-                            "Pricing Information",
-                            "Financing Questions",
-                            "Property Details",
-                            "Make an Offer",
-                            "Other"
-                        ],
+                        INQUIRY_SUBJECT_SELECT_OPTIONS,
                         key=f"question_subject_{selected_listing['id']}"
                     )
 
@@ -1886,13 +1885,9 @@ def show_main_app_buyer():
                             or question_subject == "Select Subject"
                             or not question_message
                         ):
-                            question_errors.append("Please fill in all required fields.")
+                            question_errors.append(REQUIRED_FIELDS_MESSAGE)
 
-                        if not is_valid_phone(question_phone):
-                            question_errors.append("Enter a valid 10-digit phone number.")
-
-                        if not is_valid_email(question_email):
-                            question_errors.append("Enter a valid email address.")
+                        append_contact_validation_errors(question_errors, question_email, question_phone)
 
                         if question_errors:
                             for question_error in question_errors:
@@ -1995,20 +1990,8 @@ def show_main_app_buyer():
 
                                 updated_type = st.selectbox(
                                     "Appointment Type",
-                                    [
-                                        "Property Walkthrough",
-                                        "Initial Consultation",
-                                        "Offer Discussion"
-                                    ],
-                                    index=[
-                                        "Property Walkthrough",
-                                        "Initial Consultation",
-                                        "Offer Discussion"
-                                    ].index(booking["appointment_type"]) if booking["appointment_type"] in [
-                                        "Property Walkthrough",
-                                        "Initial Consultation",
-                                        "Offer Discussion"
-                                    ] else 0,
+                                    APPOINTMENT_TYPE_OPTIONS,
+                                    index=get_option_index(APPOINTMENT_TYPE_OPTIONS, booking["appointment_type"]),
                                     key=make_key("buyer_booking", booking["id"], "updated_type")
                                 )
 
@@ -2034,7 +2017,7 @@ def show_main_app_buyer():
                                 st.markdown(
                                     f"**Selected Time:** {updated_time.strftime('%I:%M %p')}"
                                 )
-                                st.caption("Appointments must be between 8:00 AM and 5:00 PM.")
+                                st.caption(APPOINTMENT_TIME_WINDOW_MESSAGE)
 
                                 updated_message = st.text_area(
                                     "Notes",
@@ -2052,9 +2035,9 @@ def show_main_app_buyer():
                                         use_container_width=True
                                     ):
                                         if updated_date < datetime.now().date():
-                                            st.error("Appointment date cannot be in the past.")
+                                            st.error(PAST_APPOINTMENT_DATE_MESSAGE)
                                         elif updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
-                                            st.error("Appointments must be between 8:00 AM and 5:00 PM.")
+                                            st.error(APPOINTMENT_TIME_WINDOW_MESSAGE)
                                         else:
                                             updated_booking_values = {
                                                 "appointment_type": updated_type,
@@ -2102,15 +2085,13 @@ def show_main_app_buyer():
 
                         st.markdown(f"**Submitted:** {inquiry['created_at']}")
 
-                        # --- Agent response section ---
+                        st.markdown("### Agent Response")
                         if inquiry.get("response") and inquiry["response"].strip():
-                            st.markdown("### Agent Response")
                             st.markdown(inquiry["response"])
 
                             if inquiry.get("response_at") and str(inquiry["response_at"]).strip():
                                 st.markdown(f"**Responded:** {inquiry['response_at']}")
                         else:
-                            st.markdown("### Agent Response")
                             st.markdown("*No response yet.*")
 
                         st.divider()
@@ -2141,32 +2122,8 @@ def show_main_app_buyer():
 
                                 updated_subject = st.selectbox(
                                     "Subject",
-                                    [
-                                        "Property Availability",
-                                        "Schedule a Tour",
-                                        "Pricing Information",
-                                        "Financing Questions",
-                                        "Property Details",
-                                        "Make an Offer",
-                                        "Other"
-                                    ],
-                                    index=[
-                                        "Property Availability",
-                                        "Schedule a Tour",
-                                        "Pricing Information",
-                                        "Financing Questions",
-                                        "Property Details",
-                                        "Make an Offer",
-                                        "Other"
-                                    ].index(inquiry["subject"]) if inquiry["subject"] in [
-                                        "Property Availability",
-                                        "Schedule a Tour",
-                                        "Pricing Information",
-                                        "Financing Questions",
-                                        "Property Details",
-                                        "Make an Offer",
-                                        "Other"
-                                    ] else 0,
+                                    INQUIRY_SUBJECT_OPTIONS,
+                                    index=get_option_index(INQUIRY_SUBJECT_OPTIONS, inquiry["subject"]),
                                     key=make_key("buyer_inquiry", inquiry["id"], "subject")
                                 )
 
@@ -2241,7 +2198,6 @@ def main():
             show_main_app_buyer()
     else:
         show_login_page()
-
 
 if __name__ == "__main__":
     main()
