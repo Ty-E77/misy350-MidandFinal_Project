@@ -1,7 +1,3 @@
-# ============================================================
-# -- Data Layer --
-# ============================================================
-
 # -- Importing necessary packages --
 # breadcrumb
 import streamlit as st
@@ -20,8 +16,36 @@ st.set_page_config(page_title = "Real Estate Finder",
                    initial_sidebar_state = "expanded")
 
 
+def apply_base_styles():
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 1.25rem;
+                padding-bottom: 1.25rem;
+                max-width: 980px;
+            }
+            h1, h2, h3 {
+                letter-spacing: -0.01em;
+            }
+            div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]) {
+                gap: 0.7rem;
+            }
+            div[data-testid="stCaptionContainer"] p {
+                color: #6b7280;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+apply_base_styles()
+
+
 # -- Loading all json files, defining a valdation check for all json files, and setting defaults  -- 
 data_load_warnings = []
+
 
 def load_json_list(file_path, label):
     if not file_path.exists():
@@ -104,11 +128,6 @@ for booking in bookings:
     booking.setdefault("status", "Pending")
     booking.setdefault("message", "")
 
-
-# ============================================================
-# -- Service Layer --
-# ============================================================
-
 # --  Functions for repetitive tasks --
 def save_json_list(file_path, data):
     for attempt in range(3):
@@ -158,185 +177,6 @@ def update_record_with_rollback(record, updates, collection, file_path):
     record.clear()
     record.update(previous_values)
     return False
-
-
-def parse_date_safe(value, default_value):
-    if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            return default_value
-    return default_value
-
-
-def parse_time_safe(value, default_value):
-    if hasattr(value, "hour") and hasattr(value, "minute"):
-        return value
-
-    if isinstance(value, str):
-        time_formats = ["%H:%M:%S", "%H:%M"]
-        for time_format in time_formats:
-            try:
-                return datetime.strptime(value, time_format).time()
-            except ValueError:
-                continue
-
-    return default_value
-
-
-def parse_datetime_safe(value):
-    if isinstance(value, datetime):
-        return value
-
-    if isinstance(value, str):
-        raw_value = value.strip()
-        if not raw_value:
-            return datetime.min
-
-        datetime_formats = [
-            "%Y-%m-%d %H:%M:%S.%f",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d",
-        ]
-
-        for datetime_format in datetime_formats:
-            try:
-                return datetime.strptime(raw_value, datetime_format)
-            except ValueError:
-                continue
-
-        try:
-            return datetime.fromisoformat(raw_value)
-        except ValueError:
-            return datetime.min
-
-    return datetime.min
-
-
-def get_record_timestamp(record, *field_names):
-    for field_name in field_names:
-        if field_name in record:
-            parsed_value = parse_datetime_safe(record.get(field_name, ""))
-            if parsed_value != datetime.min:
-                return parsed_value
-    return datetime.min
-
-
-def reset_state_for_logout():
-    return {
-        "logged_in": False,
-        "user": None,
-        "page": "home",
-        "selected_agent_listing_id": None,
-        "selected_other_listing_id": None,
-        "selected_listing_id": None,
-        "booking_listing_id": None,
-        "question_listing_id": None,
-        "edit_agent_inquiry_id": None,
-        "edit_booking_id": None,
-        "edit_inquiry_id": None,
-    }
-
-
-def find_listing_by_id(listing_id):
-    for property_item in properties:
-        if property_item["id"] == listing_id:
-            return property_item
-    return None
-
-
-def process_chat_message(role, chat_key, user_input):
-    st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-    if role == "Agent":
-        response = get_agent_chatbot_response(user_input)
-    else:
-        response = get_buyer_chatbot_response(user_input)
-
-    st.session_state[chat_key].append({"role": "assistant", "content": response})
-
-
-def submit_chat_message(role, chat_key, chat_input_key):
-    user_input = st.session_state.get(chat_input_key, "").strip()
-
-    if user_input:
-        process_chat_message(role, chat_key, user_input)
-        st.session_state[chat_input_key] = ""
-        queue_rerun()
-
-
-def clear_chat_messages(chat_key, chat_input_key, default_message):
-    st.session_state[chat_key] = [
-        {
-            "role": "assistant",
-            "content": default_message
-        }
-    ]
-    st.session_state[chat_input_key] = ""
-    queue_rerun()
-
-def get_agent_chatbot_response(user_input):
-    user_input = user_input.strip().lower()
-
-    if user_input == "how do i add a new listing?":
-        return "Go to the sidebar and click 'Add Property Listings'. Fill out the listing overview, property details, location, and contact information, then click 'Add Listing'."
-
-    elif user_input == "where do i manage my listings?":
-        return "Go to 'View/Manage Property Listings' in the sidebar. In the 'My Property Listings' tab, click 'Manage Listing' on any property to update or delete it."
-
-    elif user_input == "where do i view buyer requests?":
-        return "Go to 'Buyer Bookings & Inquiries' from the sidebar. There you can confirm or decline bookings and respond to buyer questions."
-
-    else:
-        return "I’m not sure about that yet. Try one of the suggested questions above."
-
-def get_buyer_chatbot_response(user_input):
-    user_input = user_input.strip().lower()
-
-    if user_input == "how do i browse listings?":
-        return "Go to the sidebar and click 'Browse Listings'. You can filter by property type and status, then click 'View Listing Details' for more information."
-
-    elif user_input == "how do i book an appointment?":
-        return "Open a property from 'Browse Listings', click 'Book an Appointment', complete the form, and submit it. Your request will appear under 'My Bookings & Inquiries'."
-
-    elif user_input == "how do i ask a question?":
-        return "Open a property from 'Browse Listings', click 'Ask a Question(s)', choose a subject, type your question, and submit it. You can later view the response in 'My Bookings & Inquiries'."
-
-    else:
-        return "I’m not sure about that yet. Try one of the suggested questions above."
-
-def update_state_and_rerun(**state_updates):
-    state_changed = False
-    for state_key, state_value in state_updates.items():
-        if st.session_state.get(state_key) != state_value:
-            state_changed = True
-        st.session_state[state_key] = state_value
-
-    if state_changed:
-        queue_rerun()
-
-
-def make_key(section, item_id, action):
-    return f"{section}_{item_id}_{action}"
-
-
-def normalize_email(value):
-    return value.strip().lower()
-
-
-def is_valid_email(email):
-    pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
-    return bool(re.match(pattern, email))
-
-
-def normalize_phone(phone):
-    return "".join(char for char in phone if char.isdigit())
-
-
-def is_valid_phone(phone):
-    return len(phone) == 10
 
 # -- Session state defaults -- 
 if "logged_in" not in st.session_state:
@@ -394,46 +234,17 @@ if "buyer_chatbot" not in st.session_state:
 if "_queued_rerun" not in st.session_state:
     st.session_state["_queued_rerun"] = False
 
-# ============================================================
-# -- UI Layer --
-# ============================================================
-
-
-def apply_base_styles():
-    st.markdown(
-        """
-        <style>
-            .block-container {
-                padding-top: 1.25rem;
-                padding-bottom: 1.25rem;
-                max-width: 980px;
-            }
-            h1, h2, h3 {
-                letter-spacing: -0.01em;
-            }
-            div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stHorizontalBlock"]) {
-                gap: 0.7rem;
-            }
-            div[data-testid="stCaptionContainer"] p {
-                color: #6b7280;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-apply_base_styles()
-
-
+# -- More Functions for repetive tasks after learning on 4/6/2026 --
 def queue_rerun():
     if not st.session_state.get("_queued_rerun"):
         st.session_state["_queued_rerun"] = True
+
 
 def flush_rerun():
     if st.session_state.get("_queued_rerun"):
         st.session_state["_queued_rerun"] = False
         st.rerun()
+
 
 def navigate_to(page, **extra_updates):
     state_changed = st.session_state.get("page") != page
@@ -447,11 +258,94 @@ def navigate_to(page, **extra_updates):
     if state_changed:
         queue_rerun()
 
+
+def update_state_and_rerun(**state_updates):
+    state_changed = False
+    for state_key, state_value in state_updates.items():
+        if st.session_state.get(state_key) != state_value:
+            state_changed = True
+        st.session_state[state_key] = state_value
+
+    if state_changed:
+        queue_rerun()
+
+
+def make_key(section, item_id, action):
+    return f"{section}_{item_id}_{action}"
+
+
+def normalize_email(value):
+    return value.strip().lower()
+
+
+def is_valid_email(email):
+    pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+    return bool(re.match(pattern, email))
+
+
+def normalize_phone(phone):
+    return "".join(char for char in phone if char.isdigit())
+
+
+def is_valid_phone(phone):
+    return len(phone) == 10
+
+
 def show_data_warnings():
     if data_load_warnings:
         with st.expander("Data file warnings"):
             for warning in data_load_warnings:
                 st.warning(warning)
+
+
+def parse_date_safe(value, default_value):
+    if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return default_value
+    return default_value
+
+
+def parse_time_safe(value, default_value):
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return value
+
+    if isinstance(value, str):
+        time_formats = ["%H:%M:%S", "%H:%M"]
+        for time_format in time_formats:
+            try:
+                return datetime.strptime(value, time_format).time()
+            except ValueError:
+                continue
+
+    return default_value
+
+
+def reset_state_for_logout():
+    return {
+        "logged_in": False,
+        "user": None,
+        "page": "home",
+        "selected_agent_listing_id": None,
+        "selected_other_listing_id": None,
+        "selected_listing_id": None,
+        "booking_listing_id": None,
+        "question_listing_id": None,
+        "edit_agent_inquiry_id": None,
+        "edit_booking_id": None,
+        "edit_inquiry_id": None,
+    }
+
+
+def find_listing_by_id(listing_id):
+    for property_item in properties:
+        if property_item["id"] == listing_id:
+            return property_item
+    return None
+
 
 def render_listing_detail_sections(selected_listing):
     with st.container(border=True):
@@ -499,6 +393,47 @@ def render_listing_detail_sections(selected_listing):
         st.markdown(f"**Email:** {selected_listing['contact_email']}")
         st.markdown(f"**Phone:** {selected_listing['contact_phone']}")
 
+
+def process_chat_message(role, chat_key, user_input):
+    st.session_state[chat_key].append({"role": "user", "content": user_input})
+
+    if role == "Agent":
+        response = get_agent_chatbot_response(user_input)
+    else:
+        response = get_buyer_chatbot_response(user_input)
+
+    st.session_state[chat_key].append({"role": "assistant", "content": response})
+
+def get_agent_chatbot_response(user_input):
+    user_input = user_input.strip().lower()
+
+    if user_input == "how do i add a new listing?":
+        return "Go to the sidebar and click 'Add Property Listings'. Fill out the listing overview, property details, location, and contact information, then click 'Add Listing'."
+
+    elif user_input == "where do i manage my listings?":
+        return "Go to 'View/Manage Property Listings' in the sidebar. In the 'My Property Listings' tab, click 'Manage Listing' on any property to update or delete it."
+
+    elif user_input == "where do i view buyer requests?":
+        return "Go to 'Buyer Bookings & Inquiries' from the sidebar. There you can confirm or decline bookings and respond to buyer questions."
+
+    else:
+        return "I’m not sure about that yet. Try one of the suggested questions above."
+
+def get_buyer_chatbot_response(user_input):
+    user_input = user_input.strip().lower()
+
+    if user_input == "how do i browse listings?":
+        return "Go to the sidebar and click 'Browse Listings'. You can filter by property type and status, then click 'View Listing Details' for more information."
+
+    elif user_input == "how do i book an appointment?":
+        return "Open a property from 'Browse Listings', click 'Book an Appointment', complete the form, and submit it. Your request will appear under 'My Bookings & Inquiries'."
+
+    elif user_input == "how do i ask a question?":
+        return "Open a property from 'Browse Listings', click 'Ask a Question(s)', choose a subject, type your question, and submit it. You can later view the response in 'My Bookings & Inquiries'."
+
+    else:
+        return "I’m not sure about that yet. Try one of the suggested questions above."
+
 def show_chat_bot(role):
     if role == "Agent":
         chat_key = "agent_chatbot"
@@ -543,8 +478,6 @@ def show_chat_bot(role):
         st.divider()
 
         chat_input_key = f"{role.lower()}_chat_text_input"
-        if chat_input_key not in st.session_state:
-            st.session_state[chat_input_key] = ""
 
         col_input, col_send = st.columns([4, 1])
 
@@ -557,23 +490,34 @@ def show_chat_bot(role):
             )
 
         with col_send:
-            st.button(
+            send_clicked = st.button(
                 "Send",
                 key=f"{role.lower()}_chat_send_btn",
                 type="primary",
-                use_container_width=True,
-                on_click=submit_chat_message,
-                args=(role, chat_key, chat_input_key)
+                use_container_width=True
             )
+
+        if send_clicked:
+            user_input = user_input.strip()
+
+            if user_input:
+                process_chat_message(role, chat_key, user_input)
+                st.session_state[chat_input_key] = ""
+                queue_rerun()
 
         if st.button(
             "Clear Chat",
             key=f"{role.lower()}_chat_clear_bottom_btn",
-            use_container_width=True,
-            on_click=clear_chat_messages,
-            args=(chat_key, chat_input_key, default_message)
+            use_container_width=True
         ):
-            pass
+            st.session_state[chat_key] = [
+                {
+                    "role": "assistant",
+                    "content": default_message
+                }
+            ]
+            st.session_state[chat_input_key] = ""
+            queue_rerun()
 
 # -- Creating registration & login page -- 
 def show_login_page():
@@ -795,21 +739,9 @@ def show_main_app_agent():
         # -- Recent activity -- 
         st.markdown("### Recent Activity")
 
-        latest_listing = max(
-            agent_listings,
-            key=lambda listing: get_record_timestamp(listing, "listing_date", "created_at"),
-            default=None,
-        )
-        latest_booking = max(
-            agent_bookings,
-            key=lambda booking: get_record_timestamp(booking, "created_at", "appointment_date"),
-            default=None,
-        )
-        latest_inquiry = max(
-            agent_inquiries,
-            key=lambda inquiry: get_record_timestamp(inquiry, "created_at"),
-            default=None,
-        )
+        latest_listing = agent_listings[-1] if agent_listings else None
+        latest_booking = agent_bookings[-1] if agent_bookings else None
+        latest_inquiry = agent_inquiries[-1] if agent_inquiries else None
 
         if latest_listing:
             with st.container(border=True):
@@ -1026,20 +958,16 @@ def show_main_app_agent():
             bathrooms = st.number_input("Bathrooms", min_value=0, step=1, value=int(selected_listing["bathrooms"]))
             property_sqft = st.number_input("Property Square Footage", min_value=1, step=1, value=int(selected_listing["property_sqft"]))
 
-            property_type_options = ["House", "Apartment", "Condo", "Townhouse"]
             property_type = st.selectbox(
                 "Property Type",
-                property_type_options,
-                index=property_type_options.index(selected_listing["property_type"])
-                if selected_listing["property_type"] in property_type_options else 0
+                ["House", "Apartment", "Condo", "Townhouse"],
+                index=["House", "Apartment", "Condo", "Townhouse"].index(selected_listing["property_type"])
             )
 
-            status_options = ["Available", "Pending", "Sold"]
             status = st.selectbox(
                 "Status",
-                status_options,
-                index=status_options.index(selected_listing["status"])
-                if selected_listing["status"] in status_options else 0
+                ["Available", "Pending", "Sold"],
+                index=["Available", "Pending", "Sold"].index(selected_listing["status"])
             )
 
             col_save, col_cancel = st.columns(2)
@@ -1339,8 +1267,7 @@ def show_main_app_agent():
                                 "Confirm Appointment",
                                 key=make_key("agent_booking", booking["id"], "confirm"),
                                 type="primary",
-                                use_container_width=True,
-                                disabled=booking["status"] != "Pending"
+                                use_container_width=True
                             ):
                                 if update_record_with_rollback(booking, {"status": "Confirmed"}, bookings, json_file_bookings):
                                     st.success("Appointment confirmed successfully!")
@@ -1350,8 +1277,7 @@ def show_main_app_agent():
                             if st.button(
                                 "Decline Appointment",
                                 key=make_key("agent_booking", booking["id"], "decline"),
-                                use_container_width=True,
-                                disabled=booking["status"] != "Pending"
+                                use_container_width=True
                             ):
                                 if update_record_with_rollback(booking, {"status": "Declined"}, bookings, json_file_bookings):
                                     st.success("Appointment declined.")
@@ -1468,7 +1394,7 @@ def show_main_app_agent():
         st.write(f"Role: {st.session_state['user']['role']}")
 
         if st.button("🚪 Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Successful")
+            st.success("Logout Succesful")
             time.sleep(0.5)
             update_state_and_rerun(**reset_state_for_logout())
 
@@ -1509,7 +1435,7 @@ def show_main_app_buyer():
 
         with col1:
             with st.container(border=True):
-                st.markdown("**Open Listings**")
+                st.markdown("**Available Listings**")
                 st.markdown(f"### {available_listings}")
 
         with col2:
@@ -1556,16 +1482,10 @@ def show_main_app_buyer():
         buyer_inquiries = [i for i in inquiries if i["buyer_id"] == st.session_state["user"]["id"]]
 
         if buyer_bookings:
-            latest_booking = max(
-                buyer_bookings,
-                key=lambda booking: get_record_timestamp(booking, "created_at", "appointment_date")
-            )
+            latest_booking = buyer_bookings[-1]
 
         if buyer_inquiries:
-            latest_inquiry = max(
-                buyer_inquiries,
-                key=lambda inquiry: get_record_timestamp(inquiry, "created_at")
-            )
+            latest_inquiry = buyer_inquiries[-1]
 
         if latest_booking:
             with st.container(border=True):
@@ -1616,7 +1536,7 @@ def show_main_app_buyer():
             if type_match and status_match:
                 filtered_properties.append(listing)
 
-        st.markdown(f"#### Total Matching Listings: {len(filtered_properties)}")
+        st.markdown(f"#### Total Available Listings: {len(filtered_properties)}")
 
         # Render once, after filtering is complete
         if not filtered_properties:
@@ -1675,7 +1595,7 @@ def show_main_app_buyer():
 
             with col_btn3:
                 if st.button("← Back to Listings", key="buyer_details_back_btn", use_container_width=True):
-                    navigate_to("browse_listings", booking_listing_id=None, question_listing_id=None)
+                    navigate_to("browse_listings", booking_listing_id=None)
 
             # -- Booking Section -- 
             if st.session_state["booking_listing_id"] == selected_listing["id"]:
@@ -1712,7 +1632,6 @@ def show_main_app_buyer():
 
                     appointment_date = st.date_input(
                         "Preferred Appointment Date",
-                        min_value=datetime.now().date(),
                         key=f"appointment_date_{selected_listing['id']}"
                     )
 
@@ -1767,9 +1686,6 @@ def show_main_app_buyer():
 
                         if appointment_type == "Select Type":
                             appointment_errors.append("Please select an appointment type.")
-
-                        if appointment_date < datetime.now().date():
-                            appointment_errors.append("Appointment date cannot be in the past.")
 
                         if appointment_time < dt_time(8, 0) or appointment_time > dt_time(17, 0):
                             appointment_errors.append("Appointments must be between 8:00 AM and 5:00 PM.")
@@ -1973,8 +1889,7 @@ def show_main_app_buyer():
                             if st.button(
                                 "Update Booking",
                                 key=make_key("buyer_booking", booking["id"], "edit"),
-                                use_container_width=True,
-                                disabled=booking["status"] != "Pending"
+                                use_container_width=True
                             ):
                                 update_state_and_rerun(edit_booking_id=booking["id"])
 
@@ -1982,8 +1897,7 @@ def show_main_app_buyer():
                             if st.button(
                                 "Delete Booking",
                                 key=make_key("buyer_booking", booking["id"], "delete"),
-                                use_container_width=True,
-                                disabled=booking["status"] != "Pending"
+                                use_container_width=True
                             ):
                                 if delete_record_with_rollback(bookings, booking, json_file_bookings):
                                     st.success("Booking deleted successfully!")
@@ -2012,16 +1926,9 @@ def show_main_app_buyer():
                                     key=make_key("buyer_booking", booking["id"], "updated_type")
                                 )
 
-                                current_date = datetime.now().date()
-                                existing_booking_date = parse_date_safe(
-                                    booking.get("appointment_date"),
-                                    current_date,
-                                )
-
                                 updated_date = st.date_input(
                                     "Preferred Appointment Date",
-                                    value=max(existing_booking_date, current_date),
-                                    min_value=current_date,
+                                    value=parse_date_safe(booking.get("appointment_date"), datetime.now().date()),
                                     key=make_key("buyer_booking", booking["id"], "updated_date")
                                 )
 
@@ -2051,9 +1958,7 @@ def show_main_app_buyer():
                                         type="primary",
                                         use_container_width=True
                                     ):
-                                        if updated_date < datetime.now().date():
-                                            st.error("Appointment date cannot be in the past.")
-                                        elif updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
+                                        if updated_time < dt_time(8, 0) or updated_time > dt_time(17, 0):
                                             st.error("Appointments must be between 8:00 AM and 5:00 PM.")
                                         else:
                                             updated_booking_values = {
@@ -2222,26 +2127,21 @@ def show_main_app_buyer():
         st.write(f"Role: {st.session_state['user']['role']}")
 
         if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Successful")
+            st.success("Logout Succesful")
             time.sleep(0.5)
             update_state_and_rerun(**reset_state_for_logout())
 
     flush_rerun()
 
-# -- Runs the main page based on user role and if not logged in displays login/registration page --
-def main():
-    if (
-        st.session_state["logged_in"]
-        and st.session_state["user"] is not None
-        and isinstance(st.session_state["user"], dict)
-    ):
-        if st.session_state["user"]["role"] == "Agent":
-            show_main_app_agent()
-        elif st.session_state["user"]["role"] == "Buyer":
-            show_main_app_buyer()
-    else:
-        show_login_page()
-
-
-if __name__ == "__main__":
-    main()
+# -- Runs the main page best on user role and if not logged in displays login/registration page -- 
+if (
+    st.session_state["logged_in"]
+    and st.session_state["user"] is not None
+    and isinstance(st.session_state["user"], dict)
+):
+    if st.session_state["user"]["role"] == "Agent":
+        show_main_app_agent()
+    elif st.session_state["user"]["role"] == "Buyer":
+        show_main_app_buyer()
+else:
+    show_login_page()
