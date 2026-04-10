@@ -417,7 +417,6 @@ for chatbot_key, default_messages in CHATBOT_DEFAULTS.items():
 # -- UI Layer --
 # ============================================================
 
-
 def apply_base_styles():
     st.markdown(
         """
