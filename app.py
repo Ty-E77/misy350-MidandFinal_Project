@@ -719,11 +719,44 @@ apply_base_styles()
 # APP ENTRY POINT
 # =========================
 
+def render_sidebar():
+    user = st.session_state.get("user") or {}
+    role = user.get("role")
+    with st.sidebar:
+        st.markdown("# **Navigator**")
+        if role == "Agent":
+            if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
+                navigate_to("home")
+            if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
+                navigate_to("properties_listings")
+            if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
+                navigate_to("add_listings")
+            if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
+                navigate_to("buyer_inquiries")
+        elif role == "Buyer":
+            if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
+                navigate_to("home")
+            if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
+                navigate_to("browse_listings")
+            if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
+                navigate_to("my_inquiries")
+
+        st.write(f"Logged in as: {user.get('email','')}")
+        st.write(f"Role: {user.get('role','')}")
+
+        if st.button("🚪 Log Out", key="nav_logout_btn", type="primary", use_container_width=True):
+            st.success("Logout Succesful")
+            time.sleep(0.5)
+            st.session_state.update(reset_state_for_logout())
+            queue_rerun()
+
 if (
     st.session_state.get("logged_in")
     and st.session_state.get("user") is not None
     and isinstance(st.session_state.get("user"), dict)
 ):
+    # Render a single centralized sidebar for the current user/role
+    render_sidebar()
     if st.session_state.get("user").get("role") == "Agent":
         show_main_app_agent()
     elif st.session_state.get("user").get("role") == "Buyer":
@@ -2106,31 +2139,7 @@ def show_main_app_agent():
                                     ):
                                         update_state_and_rerun(edit_agent_inquiry_id=None)
     
-    # -- Sidebar for navigating pages and logging out for agent -- 
-    with st.sidebar:
-        st.markdown("# **Navigator**")
-
-        if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
-            navigate_to("home")
-
-        if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
-            navigate_to("properties_listings")
-
-        if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
-            navigate_to("add_listings")
-
-        if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
-            navigate_to("buyer_inquiries")
-        
-        st.write(f"Logged in as: {st.session_state['user']['email']}")
-        st.write(f"Role: {st.session_state['user']['role']}")
-
-        if st.button("🚪 Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Succesful")
-            time.sleep(0.5)
-            update_state_and_rerun(**reset_state_for_logout())
-
-    flush_rerun()
+    # Agent sidebar removed here; centralized `render_sidebar()` will render it once per app run.
 
 
 # -- Defining application for buyer -- 
@@ -2842,28 +2851,7 @@ def show_main_app_buyer():
                                     ):
                                         update_state_and_rerun(edit_inquiry_id=None)
                             
-    # -- Sidebar for navigating pages and logging out for buyer -- 
-    with st.sidebar:
-        st.markdown("# **Navigator**")
-
-        if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
-            navigate_to("home")
-
-        if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
-            navigate_to("browse_listings")
-
-        if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
-            navigate_to("my_inquiries")
-                
-        st.write(f"Logged in as: {st.session_state['user']['email']}")
-        st.write(f"Role: {st.session_state['user']['role']}")
-
-        if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Succesful")
-            time.sleep(0.5)
-            update_state_and_rerun(**reset_state_for_logout())
-
-    flush_rerun()
+    # Buyer sidebar removed here; centralized `render_sidebar()` will render it once per app run.
 
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
