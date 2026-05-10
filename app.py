@@ -433,336 +433,9 @@ def show_chat_bot(role):
             st.session_state["_queued_rerun"] = True
 
 
-def show_login_page():
-    st.markdown("# Real Estate Finder")
-    st.caption("Browse listings, book appointments, and connect with agents.")
-    show_data_warnings()
-    st.divider()
-
-    tab1, tab2 = st.tabs(["Log In", "Register"])
-
-    with tab1:
-        with st.container(border=True):
-            st.markdown("## Welcome Back")
-
-            email_login = st.text_input("Email", placeholder="Enter your email", key="login_email")
-            password_login = st.text_input("Password", type="password", key="login_password")
-
-            if st.button("Log In", key="auth_login_submit_btn", use_container_width=True, type="primary"):
-                login_errors = []
-                login_check = None
-                email_login_n = normalize_email(email_login or "")
-
-                if not email_login_n or not password_login:
-                    login_errors.append("Please enter your email and password.")
-
-                if email_login_n and not is_valid_email(email_login_n):
-                    login_errors.append("Please enter a valid email address.")
-
-                if not login_errors:
-                    with st.spinner("Verifying credentials..."):
-                        time.sleep(0.5)
-
-                    for user in users:
-                        if user.get("email") == email_login_n and verify_password(user.get("password"), password_login):
-                            login_check = user
-                            break
-
-                    if login_check:
-                        st.session_state["logged_in"] = True
-                        st.session_state["user"] = login_check
-                        st.session_state["page"] = "home"
-                        st.session_state["_queued_rerun"] = True
-                    else:
-                        st.error("Invalid email or password.")
-                else:
-                    for login_error in login_errors:
-                        st.warning(login_error)
-
-    with tab2:
-        with st.container(border=True):
-            st.markdown("## Create Account")
-
-            full_name = st.text_input("Full Name", placeholder="Enter your full name", key="full_name_new")
-            email = st.text_input("Email", placeholder="Enter your email", key="email_new")
-            password = st.text_input("Password", type="password", key="password_new")
-            role = st.selectbox("Role", ["Agent", "Buyer"], key="role_new")
-
-            if st.button("Create Account", key="auth_register_submit_btn", use_container_width=True, type="primary"):
-                with st.spinner("Creating account..."):
-                    time.sleep(0.5)
-
-                result = None
-                new_email = normalize_email(email)
-                existing_user = next((u for u in users if u.get("email","").strip().lower() == new_email), None)
-                register_errors = []
-
-                if existing_user is not None:
-                    register_errors.append("An account with this email already exists.")
-
-                if not full_name or not new_email or not password:
-                    register_errors.append("Please fill in all required fields.")
-
-                if not is_valid_email(new_email):
-                    register_errors.append("Please enter a valid email address.")
-
-                if register_errors:
-                    for register_error in register_errors:
-                        st.error(register_error)
-                else:
-                    users.append({
-                        "id": str(uuid.uuid4()),
-                        "email": new_email,
-                        "full_name": full_name.strip(),
-                        "password": hash_password(password),
-                        "role": role,
-                        "registered_at": str(datetime.now())
-                    })
-                    if save_json_list(json_file_users, users):
-                        st.success("Account created successfully! You can now log in.")
-                    else:
-                        users.pop()
-
-    if st.session_state.get("_queued_rerun"):
-        st.session_state["_queued_rerun"] = False
-        st.rerun()
+    
 
 
-def show_main_app_agent():
-    page = st.session_state.get("page", "home")
-    user = st.session_state.get("user") or {}
-
-    if page == "home":
-        st.markdown(f"## Agent Dashboard - {user.get('full_name','')}")
-        st.caption("Manage listings, review buyer bookings, and respond to inquiries.")
-        show_data_warnings()
-        st.divider()
-
-        stats_my_listings = 0
-        stats_available = 0
-        stats_pending = 0
-        stats_new_inquiries = 0
-        agent_listings = []
-        agent_bookings = []
-        agent_inquiries = []
-
-        for listing in properties:
-            if listing.get("agent_id") == user.get("id"):
-                agent_listings.append(listing)
-                stats_my_listings += 1
-                if listing.get("status") == "Available":
-                    stats_available += 1
-
-        for booking in bookings:
-            if booking.get("agent_id") == user.get("id"):
-                agent_bookings.append(booking)
-                if booking.get("status") == "Pending":
-                    stats_pending += 1
-
-        for inquiry in inquiries:
-            if inquiry.get("agent_id") == user.get("id"):
-                agent_inquiries.append(inquiry)
-                if inquiry.get("status") == "New":
-                    stats_new_inquiries += 1
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            with st.container(border=True):
-                st.markdown("**My Listings**")
-                st.markdown(f"### {stats_my_listings}")
-        with col2:
-            with st.container(border=True):
-                st.markdown("**Available Listings**")
-                st.markdown(f"### {stats_available}")
-        with col3:
-            with st.container(border=True):
-                st.markdown("**Pending Bookings**")
-                st.markdown(f"### {stats_pending}")
-        with col4:
-            with st.container(border=True):
-                st.markdown("**New Inquiries**")
-                st.markdown(f"### {stats_new_inquiries}")
-
-        st.divider()
-        st.markdown("### Quick Actions")
-        ca, cb, cc = st.columns(3)
-        with ca:
-            if st.button("View My Listings", key="agent_home_view_listings_btn", type="primary", use_container_width=True):
-                st.session_state["page"] = "properties_listings"; st.session_state["_queued_rerun"] = True
-        with cb:
-            if st.button("Add New Listing", key="agent_home_add_listing_btn", use_container_width=True):
-                st.session_state["page"] = "add_listings"; st.session_state["_queued_rerun"] = True
-        with cc:
-            if st.button("View Buyer Requests", key="agent_home_buyer_requests_btn", use_container_width=True):
-                st.session_state["page"] = "buyer_inquiries"; st.session_state["_queued_rerun"] = True
-
-        st.divider()
-        show_chat_bot("Agent")
-        st.divider()
-
-        latest_listing = agent_listings[-1] if agent_listings else None
-        latest_booking = agent_bookings[-1] if agent_bookings else None
-        latest_inquiry = agent_inquiries[-1] if agent_inquiries else None
-
-        if latest_listing:
-            with st.container(border=True):
-                st.markdown("**Latest Listing**")
-                st.markdown(f"**Title:** {latest_listing.get('title','')}")
-                st.markdown(f"**Status:** {latest_listing.get('status','')}")
-                st.markdown(f"**Price:** ${latest_listing.get('price',0):,}")
-
-        if latest_booking:
-            with st.container(border=True):
-                st.markdown("**Latest Booking Request**")
-                st.markdown(f"**Property:** {latest_booking.get('property_title','')}")
-                st.markdown(f"**Buyer:** {latest_booking.get('buyer_name','')}")
-                st.markdown(f"**Status:** {latest_booking.get('status','')}")
-
-        if latest_inquiry:
-            with st.container(border=True):
-                st.markdown("**Latest Inquiry**")
-                st.markdown(f"**Property:** {latest_inquiry.get('property_title','')}")
-                st.markdown(f"**Buyer:** {latest_inquiry.get('buyer_name','')}")
-                st.markdown(f"**Status:** {latest_inquiry.get('status','')}")
-
-        if not any([latest_listing, latest_booking, latest_inquiry]):
-            st.info("No recent activity yet. Start by adding your first listing.")
-
-    # properties_listings, manage, edit, view_other, add_listings handled similarly (kept same logic as original)
-    # For brevity in this patch we reuse the existing larger buyer/agent implementations from prior codebase
-    # (the full UI pages are implemented below in the buyer section and earlier agent code blocks)
-
-    # agent sidebar moved to the end of the agent UI to avoid duplication
-
-
-def show_main_app_buyer():
-    page = st.session_state.get("page", "home")
-    user = st.session_state.get("user") or {}
-
-    if page == "home":
-        st.markdown(f"## Buyer Dashboard - {user.get('full_name','')}")
-        st.caption("Browse listings, book appointments, and manage your inquiries.")
-        show_data_warnings()
-        st.divider()
-
-        stats = {
-            "available_listings": len([l for l in properties if l.get('status') in ['Available','Pending']]),
-            "my_bookings": len([b for b in bookings if b.get('buyer_id')==user.get('id')]),
-            "pending_bookings": len([b for b in bookings if b.get('buyer_id')==user.get('id') and b.get('status')=='Pending']),
-            "my_inquiries": len([i for i in inquiries if i.get('buyer_id')==user.get('id')])
-        }
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            with st.container(border=True):
-                st.markdown("**Available Listings**")
-                st.markdown(f"### {stats.get('available_listings',0)}")
-        with col2:
-            with st.container(border=True):
-                st.markdown("**My Bookings**")
-                st.markdown(f"### {stats.get('my_bookings',0)}")
-        with col3:
-            with st.container(border=True):
-                st.markdown("**Pending Bookings**")
-                st.markdown(f"### {stats.get('pending_bookings',0)}")
-        with col4:
-            with st.container(border=True):
-                st.markdown("**My Inquiries**")
-                st.markdown(f"### {stats.get('my_inquiries',0)}")
-
-        st.divider()
-        st.markdown("### Quick Actions")
-        ca, cb = st.columns(2)
-        with ca:
-            if st.button("Browse Listings", key="buyer_home_browse_btn", type="primary", use_container_width=True):
-                st.session_state["page"] = "browse_listings"; st.session_state["_queued_rerun"] = True
-        with cb:
-            if st.button("View My Bookings & Inquiries", key="buyer_home_requests_btn", use_container_width=True):
-                st.session_state["page"] = "my_inquiries"; st.session_state["_queued_rerun"] = True
-
-        st.divider()
-        show_chat_bot("Buyer")
-        st.divider()
-
-        buyer_bookings = [b for b in bookings if b.get('buyer_id')==user.get('id')]
-        buyer_inquiries = [i for i in inquiries if i.get('buyer_id')==user.get('id')]
-        latest_booking = buyer_bookings[-1] if buyer_bookings else None
-        latest_inquiry = buyer_inquiries[-1] if buyer_inquiries else None
-
-        if latest_booking:
-            with st.container(border=True):
-                st.markdown("**Latest Booking**")
-                st.markdown(f"Property: {latest_booking.get('property_title','')}")
-                st.markdown(f"Status: {latest_booking.get('status','')}")
-                st.markdown(f"Date: {latest_booking.get('appointment_date','')}")
-
-        if latest_inquiry:
-            with st.container(border=True):
-                st.markdown("**Latest Inquiry**")
-                st.markdown(f"Property: {latest_inquiry.get('property_title','')}")
-                st.markdown(f"Status: {latest_inquiry.get('status','')}")
-                st.markdown(f"Subject: {latest_inquiry.get('subject','')}")
-
-        if not latest_booking and not latest_inquiry:
-            st.info("No recent activity yet. Start by browsing available listings.")
-
-    # browse_listings, view_listing_details, my_inquiries implemented below (preserve original behavior)
-
-    # Buyer sidebar moved to the end of the file to keep sidebar widgets centralized
-
-
-# Apply base styles at module import
-apply_base_styles()
-
-
-# =========================
-# APP ENTRY POINT
-# =========================
-
-def render_sidebar():
-    user = st.session_state.get("user") or {}
-    role = user.get("role")
-    with st.sidebar:
-        st.markdown("# **Navigator**")
-        if role == "Agent":
-            if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
-                navigate_to("home")
-            if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
-                navigate_to("properties_listings")
-            if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
-                navigate_to("add_listings")
-            if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
-                navigate_to("buyer_inquiries")
-        elif role == "Buyer":
-            if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
-                navigate_to("home")
-            if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
-                navigate_to("browse_listings")
-            if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
-                navigate_to("my_inquiries")
-
-        st.write(f"Logged in as: {user.get('email','')}")
-        st.write(f"Role: {user.get('role','')}")
-
-        if st.button("🚪 Log Out", key="nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Succesful")
-            time.sleep(0.5)
-            st.session_state.update(reset_state_for_logout())
-            queue_rerun()
-
-if (
-    st.session_state.get("logged_in")
-    and st.session_state.get("user") is not None
-    and isinstance(st.session_state.get("user"), dict)
-):
-    # Render a single centralized sidebar for the current user/role
-    render_sidebar()
-    if st.session_state.get("user").get("role") == "Agent":
-        show_main_app_agent()
-    elif st.session_state.get("user").get("role") == "Buyer":
-        show_main_app_buyer()
-else:
-    show_login_page()
 # -- Importing necessary packages --
 # breadcrumb
 import streamlit as st
@@ -2853,15 +2526,49 @@ def show_main_app_buyer():
                             
     # Buyer sidebar removed here; centralized `render_sidebar()` will render it once per app run.
 
+def render_sidebar():
+    user = st.session_state.get("user") or {}
+    role = user.get("role")
+    with st.sidebar:
+        st.markdown("# **Navigator**")
+        if role == "Agent":
+            if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
+                navigate_to("home")
+            if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
+                navigate_to("properties_listings")
+            if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
+                navigate_to("add_listings")
+            if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
+                navigate_to("buyer_inquiries")
+        elif role == "Buyer":
+            if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
+                navigate_to("home")
+            if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
+                navigate_to("browse_listings")
+            if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
+                navigate_to("my_inquiries")
+
+        st.write(f"Logged in as: {user.get('email','')}")
+        st.write(f"Role: {user.get('role','')}")
+
+        if st.button("🚪 Log Out", key="nav_logout_btn", type="primary", use_container_width=True):
+            st.success("Logout Succesful")
+            time.sleep(0.5)
+            st.session_state.update(reset_state_for_logout())
+            queue_rerun()
+
+
 # -- Runs the main page best on user role and if not logged in displays login/registration page -- 
 if (
-    st.session_state["logged_in"]
-    and st.session_state["user"] is not None
-    and isinstance(st.session_state["user"], dict)
+    st.session_state.get("logged_in")
+    and st.session_state.get("user") is not None
+    and isinstance(st.session_state.get("user"), dict)
 ):
-    if st.session_state["user"]["role"] == "Agent":
+    # render sidebar once
+    render_sidebar()
+    if st.session_state.get("user")["role"] == "Agent":
         show_main_app_agent()
-    elif st.session_state["user"]["role"] == "Buyer":
+    elif st.session_state.get("user")["role"] == "Buyer":
         show_main_app_buyer()
 else:
     show_login_page()
