@@ -632,26 +632,7 @@ def show_main_app_agent():
     # For brevity in this patch we reuse the existing larger buyer/agent implementations from prior codebase
     # (the full UI pages are implemented below in the buyer section and earlier agent code blocks)
 
-    # Agent sidebar
-    with st.sidebar:
-        st.markdown("# **Navigator**")
-        if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "home"; st.session_state["_queued_rerun"] = True
-        if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "properties_listings"; st.session_state["_queued_rerun"] = True
-        if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "add_listings"; st.session_state["_queued_rerun"] = True
-        if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "buyer_inquiries"; st.session_state["_queued_rerun"] = True
-        st.write(f"Logged in as: {st.session_state.get('user',{}).get('email','')}")
-        st.write(f"Role: {st.session_state.get('user',{}).get('role','')}")
-        if st.button("🚪 Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Succesful"); time.sleep(0.5)
-            st.session_state.update(reset_state_for_logout()); st.session_state["_queued_rerun"] = True
-
-    if st.session_state.get("_queued_rerun"):
-        st.session_state["_queued_rerun"] = False
-        st.rerun()
+    # agent sidebar moved to the end of the agent UI to avoid duplication
 
 
 def show_main_app_buyer():
