@@ -708,24 +708,7 @@ def show_main_app_buyer():
 
     # browse_listings, view_listing_details, my_inquiries implemented below (preserve original behavior)
 
-    # Buyer sidebar
-    with st.sidebar:
-        st.markdown("# **Navigator**")
-        if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "home"; st.session_state["_queued_rerun"] = True
-        if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "browse_listings"; st.session_state["_queued_rerun"] = True
-        if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
-            st.session_state["page"] = "my_inquiries"; st.session_state["_queued_rerun"] = True
-        st.write(f"Logged in as: {st.session_state.get('user',{}).get('email','')}")
-        st.write(f"Role: {st.session_state.get('user',{}).get('role','')}")
-        if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
-            st.success("Logout Succesful"); time.sleep(0.5)
-            st.session_state.update(reset_state_for_logout()); st.session_state["_queued_rerun"] = True
-
-    if st.session_state.get("_queued_rerun"):
-        st.session_state["_queued_rerun"] = False
-        st.rerun()
+    # Buyer sidebar moved to the end of the file to keep sidebar widgets centralized
 
 
 # Apply base styles at module import
