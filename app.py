@@ -121,6 +121,7 @@ class RealEstateData:
         for user in self.users:
             user.setdefault("full_name", "")
             user.setdefault("role", "")
+            user.setdefault("saved_listing_ids", [])
 
     def apply_property_defaults(self):
         for listing in self.properties:
@@ -129,6 +130,7 @@ class RealEstateData:
             listing.setdefault("contact_name", "")
             listing.setdefault("contact_email", "")
             listing.setdefault("contact_phone", "")
+            listing.setdefault("image_url", "")
 
     def apply_inquiry_defaults(self):
         for inquiry in self.inquiries:
@@ -207,6 +209,9 @@ class RealEstateData:
 
     def add_user(self, user):
         return self.add_record(self.users, self.json_file_users, user)
+
+    def update_user(self, user_id, updates):
+        return self.update_record(self.users, self.json_file_users, user_id, updates)
 
     def add_property(self, listing):
         return self.add_record(self.properties, self.json_file_properties, listing)
@@ -434,6 +439,7 @@ class RealEstateService:
             "my_bookings": len(buyer_bookings),
             "pending_bookings": len([b for b in buyer_bookings if b.get("status") == "Pending"]),
             "my_inquiries": len(buyer_inquiries),
+            "saved_listings": len(self.get_saved_listings(buyer_id)),
             "buyer_bookings": buyer_bookings,
             "buyer_inquiries": buyer_inquiries,
         }
@@ -465,12 +471,13 @@ class RealEstateService:
             "full_name": full_name.strip(),
             "password": password,
             "role": role,
+            "saved_listing_ids": [],
             "registered_at": str(datetime.now())
         }
         self.data.add_user(user)
         return True, "Account created successfully! You can now log in.", user
 
-    def create_listing(self, agent_id, title, description, address, city, state, price, bedrooms, bathrooms, property_sqft, property_type, status, contact_name, contact_email, contact_phone):
+    def create_listing(self, agent_id, title, description, address, city, state, price, bedrooms, bathrooms, property_sqft, property_type, status, contact_name, contact_email, contact_phone, image_url=""):
         title = title.strip()
         description = description.strip()
         address = address.strip()
@@ -479,6 +486,7 @@ class RealEstateService:
         contact_name = contact_name.strip()
         contact_email = self.normalize_email(contact_email)
         contact_phone = self.normalize_phone(contact_phone)
+        image_url = str(image_url or "").strip()
 
         if not title or not address or not city or not state or not contact_name or not contact_email or not contact_phone:
             return False, "Please fill in all required fields.", None
@@ -506,6 +514,7 @@ class RealEstateService:
             "contact_name": contact_name,
             "contact_email": contact_email,
             "contact_phone": contact_phone,
+            "image_url": image_url,
             "listing_date": str(datetime.now())
         }
         self.data.add_property(new_listing)
@@ -517,6 +526,7 @@ class RealEstateService:
             updates[key] = str(updates.get(key, "")).strip()
 
         updates["description"] = str(updates.get("description", "")).strip()
+        updates["image_url"] = str(updates.get("image_url", "")).strip()
         updates["contact_email"] = self.normalize_email(updates["contact_email"])
         updates["contact_phone"] = self.normalize_phone(updates["contact_phone"])
 
@@ -542,6 +552,42 @@ class RealEstateService:
         if deleted_listing is None:
             return False, "Listing not found."
         return True, "Listing deleted successfully!"
+
+    def get_saved_listing_ids(self, buyer):
+        saved_ids = buyer.get("saved_listing_ids", []) if isinstance(buyer, dict) else []
+        return saved_ids if isinstance(saved_ids, list) else []
+
+    def is_listing_saved(self, buyer, listing_id):
+        return listing_id in self.get_saved_listing_ids(buyer)
+
+    def get_saved_listings(self, buyer_id):
+        buyer = self.data.find_record_by_id(self.data.users, buyer_id)
+        saved_ids = self.get_saved_listing_ids(buyer or {})
+        return [listing for listing in self.data.properties if listing.get("id") in saved_ids]
+
+    def toggle_saved_listing(self, buyer, listing_id):
+        if not isinstance(buyer, dict) or not buyer.get("id"):
+            return False, "Please log in again before saving listings.", False
+
+        if self.find_listing_by_id(listing_id) is None:
+            return False, "Listing not found.", False
+
+        saved_ids = list(self.get_saved_listing_ids(buyer))
+        if listing_id in saved_ids:
+            saved_ids.remove(listing_id)
+            saved = False
+            message = "Listing removed from saved listings."
+        else:
+            saved_ids.append(listing_id)
+            saved = True
+            message = "Listing saved successfully."
+
+        updated_user = self.data.update_user(buyer["id"], {"saved_listing_ids": saved_ids})
+        if updated_user is None:
+            return False, "User not found.", False
+
+        buyer["saved_listing_ids"] = saved_ids
+        return True, message, saved
 
     def create_booking(self, listing, buyer, appointment_name, appointment_email, appointment_phone, appointment_type, appointment_date, appointment_time, appointment_message):
         appointment_name = appointment_name.strip()
@@ -737,8 +783,10 @@ class RealEstateService:
 
         buyer_bookings = self.get_buyer_bookings(user_id)
         buyer_inquiries = self.get_buyer_inquiries(user_id)
+        saved_listings = self.get_saved_listings(user_id)
         visible_listings = [l for l in self.data.properties if l.get("status") != "Sold"][:12]
         listing_lines = [self.summarize_listing_for_chat(l) for l in visible_listings]
+        saved_lines = [self.summarize_listing_for_chat(l) for l in saved_listings[:10]]
         booking_lines = [
             f"- {b.get('property_title', '')} | {b.get('appointment_type', '')} | "
             f"{b.get('appointment_date', '')} at {b.get('appointment_time', '')} | Status: {b.get('status', '')}"
@@ -840,6 +888,40 @@ class RealEstateUI:
         "Financing Questions", "Property Details", "Make an Offer", "Other"
     ]
 
+    STOCK_PROPERTY_IMAGES = [
+        "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1400&q=80",
+        "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1400&q=80",
+    ]
+
+    STOCK_IMAGES_BY_TYPE = {
+        "House": [
+            "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+        ],
+        "Apartment": [
+            "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80",
+        ],
+        "Condo": [
+            "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=80",
+        ],
+        "Townhouse": [
+            "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1400&q=80",
+            "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=1400&q=80",
+        ],
+    }
+
     def __init__(self, service):
         self.service = service
         self.data = service.data
@@ -848,7 +930,7 @@ class RealEstateUI:
         st.set_page_config(
             page_title="Real Estate Finder",
             page_icon="🏠",
-            layout="centered",
+            layout="wide",
             initial_sidebar_state="expanded"
         )
 
@@ -875,6 +957,16 @@ class RealEstateUI:
             .block-container {
                 padding-top: 2rem;
                 padding-bottom: 3rem;
+                max-width: 1500px;
+                padding-left: 2.5rem;
+                padding-right: 2.5rem;
+            }
+
+            @media (max-width: 900px) {
+                .block-container {
+                    padding-left: 1rem;
+                    padding-right: 1rem;
+                }
             }
 
             .page-header {
@@ -954,10 +1046,11 @@ class RealEstateUI:
                 background: var(--re-surface);
                 border: 1px solid var(--re-border);
                 border-radius: 24px;
-                padding: 1.25rem 1.25rem 1rem 1.25rem;
+                padding: 1rem;
                 margin: 1rem 0 0.4rem 0;
                 box-shadow: var(--re-shadow);
                 color: var(--re-text);
+                height: 100%;
             }
 
             .listing-card-top {
@@ -1127,6 +1220,98 @@ class RealEstateUI:
                 margin: 0.12rem 0;
             }
 
+
+
+            .listing-image {
+                width: 100%;
+                min-height: 180px;
+                border-radius: 18px;
+                border: 1px solid var(--re-border);
+                background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(14,165,233,0.12));
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                margin-bottom: 1rem;
+                color: var(--re-muted);
+                font-weight: 800;
+                text-align: center;
+            }
+
+            .listing-detail-image {
+                min-height: 360px;
+                margin-bottom: 1.25rem;
+            }
+
+            .listing-image img {
+                width: 100%;
+                height: 220px;
+                object-fit: cover;
+                display: block;
+            }
+
+            .listing-detail-image img {
+                height: 420px;
+            }
+
+            @media (max-width: 900px) {
+                .listing-detail-image,
+                .listing-detail-image img {
+                    min-height: 220px;
+                    height: 260px;
+                }
+            }
+
+            .filter-chip-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                margin: 0.75rem 0 0.25rem 0;
+            }
+
+            .filter-chip {
+                display: inline-block;
+                padding: 0.35rem 0.65rem;
+                border-radius: 999px;
+                border: 1px solid var(--re-border);
+                background: var(--re-surface);
+                color: var(--re-text);
+                font-size: 0.82rem;
+                font-weight: 700;
+            }
+
+            .next-step-card {
+                background: var(--re-surface);
+                border: 1px solid var(--re-border);
+                border-radius: 20px;
+                padding: 1rem;
+                margin: 0.5rem 0;
+                box-shadow: var(--re-shadow);
+                color: var(--re-text);
+            }
+
+            .next-step-title {
+                font-weight: 850;
+                margin-bottom: 0.25rem;
+            }
+
+            .next-step-message {
+                color: var(--re-muted);
+                margin: 0;
+            }
+
+            .answered-badge {
+                display: inline-block;
+                margin-top: 0.35rem;
+                padding: 0.25rem 0.6rem;
+                border-radius: 999px;
+                background: rgba(34, 197, 94, 0.14);
+                color: #86efac;
+                border: 1px solid rgba(34, 197, 94, 0.32);
+                font-size: 0.78rem;
+                font-weight: 850;
+            }
+
             /* Streamlit bordered containers */
             div[data-testid="stVerticalBlockBorderWrapper"] {
                 background: transparent !important;
@@ -1219,6 +1404,103 @@ class RealEstateUI:
             "Square Feet: High to Low",
             "Status",
         ]
+
+    def get_stock_image_url(self, listing):
+        property_type = str(listing.get("property_type", "")).strip()
+        listing_id = str(listing.get("id") or listing.get("title") or property_type or "default")
+        image_pool = self.STOCK_IMAGES_BY_TYPE.get(property_type, self.STOCK_PROPERTY_IMAGES)
+        if not image_pool:
+            image_pool = self.STOCK_PROPERTY_IMAGES
+        index = sum(ord(char) for char in listing_id) % len(image_pool)
+        return image_pool[index]
+
+    def get_listing_image_url(self, listing):
+        image_url = str(listing.get("image_url", "") or "").strip()
+        return image_url if image_url else self.get_stock_image_url(listing)
+
+    def render_listing_image_html(self, listing, detail=False):
+        image_url = self.get_listing_image_url(listing)
+        detail_class = " listing-detail-image" if detail else ""
+        return f'<div class="listing-image{detail_class}"><img src="{self.escape(image_url)}" alt="Property image"></div>'
+
+    def render_listing_grid(self, listings, button_label, button_key_prefix, next_page, selected_key, show_favorite=False, columns=2):
+        if not listings:
+            return
+        column_items = st.columns(columns)
+        for index, listing in enumerate(listings):
+            with column_items[index % columns]:
+                self.render_listing_card(
+                    listing,
+                    button_label,
+                    f"{button_key_prefix}_{listing['id']}",
+                    next_page,
+                    selected_key,
+                    show_favorite=show_favorite
+                )
+
+    def render_active_filter_summary(self, selected_type, selected_status, search_text, sort_option):
+        chips = []
+        if selected_type != "All":
+            chips.append(f"Type: {selected_type}")
+        if selected_status != "All":
+            chips.append(f"Status: {selected_status}")
+        if str(search_text or "").strip():
+            chips.append(f"Search: {search_text.strip()}")
+        if sort_option:
+            chips.append(f"Sort: {sort_option}")
+        if not chips:
+            chips.append("Showing all matching listings")
+
+        chip_html = "".join(f'<span class="filter-chip">{self.escape(chip)}</span>' for chip in chips)
+        st.markdown(f'<div class="filter-chip-row">{chip_html}</div>', unsafe_allow_html=True)
+
+    def render_next_step_card(self, title, message, icon="✨"):
+        st.markdown(
+            f'''
+            <div class="next-step-card">
+                <div class="next-step-title">{self.escape(icon)} {self.escape(title)}</div>
+                <p class="next-step-message">{self.escape(message)}</p>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+
+    def render_agent_next_steps(self, stats):
+        self.render_section_title("Recommended Next Steps")
+        if stats["pending_bookings_count"]:
+            self.render_next_step_card("Review pending appointments", f"You have {stats['pending_bookings_count']} pending booking request(s) waiting for a response.", "📅")
+        if stats["new_inquiries_count"]:
+            self.render_next_step_card("Answer new buyer questions", f"You have {stats['new_inquiries_count']} new inquiry/inquiries that may need a response.", "💬")
+        if not stats["my_listings_count"]:
+            self.render_next_step_card("Add your first listing", "Create a property listing so buyers can browse, book, and ask questions.", "🏠")
+        if stats["my_listings_count"] and not stats["pending_bookings_count"] and not stats["new_inquiries_count"]:
+            self.render_next_step_card("Keep listings fresh", "Review your active listings and update pricing, status, or photos when needed.", "✅")
+
+    def render_buyer_next_steps(self, stats):
+        self.render_section_title("Recommended Next Steps")
+        if not stats["saved_listings"]:
+            self.render_next_step_card("Save listings you like", "Use the Save Listing button while browsing so you can compare your favorite properties later.", "⭐")
+        if not stats["my_bookings"]:
+            self.render_next_step_card("Book a property tour", "Open a listing and request an appointment when you find a property you want to see.", "📅")
+        if stats["pending_bookings"]:
+            self.render_next_step_card("Track pending appointments", f"You have {stats['pending_bookings']} pending appointment request(s). Check back for agent updates.", "⏳")
+        if stats["my_inquiries"]:
+            self.render_next_step_card("Check inquiry responses", "Review your inquiries to see whether agents have answered your questions.", "💬")
+
+    def render_save_listing_button(self, listing):
+        user = self.current_user() or {}
+        if user.get("role") != "Buyer":
+            return
+        is_saved = self.service.is_listing_saved(user, listing.get("id"))
+        label = "★ Saved Listing" if is_saved else "☆ Save Listing"
+        if st.button(label, key=f"save_listing_{listing['id']}", use_container_width=True):
+            success, message, saved = self.service.toggle_saved_listing(user, listing["id"])
+            if success:
+                st.success(message)
+                st.session_state["user"] = user
+                self.rerun()
+            else:
+                st.error(message)
 
     def render_listing_filter_controls(self, type_key, status_key, search_key, sort_key, status_options):
         with st.container(border=True):
@@ -1373,10 +1655,11 @@ class RealEstateUI:
     def render_stat_card(self, title, value):
         self.render_metric_card(title, value)
 
-    def render_listing_card(self, listing, button_label, button_key, next_page, selected_key):
+    def render_listing_card(self, listing, button_label, button_key, next_page, selected_key, show_favorite=False):
         st.markdown(
             f"""
             <div class="listing-card">
+                {self.render_listing_image_html(listing)}
                 <div class="listing-card-top">
                     <div>
                         <div class="listing-title">{self.escape(listing.get('title', 'Untitled Listing'))}</div>
@@ -1397,12 +1680,23 @@ class RealEstateUI:
             """,
             unsafe_allow_html=True
         )
-        if st.button(button_label, key=button_key, type="primary", use_container_width=True):
-            st.session_state[selected_key] = listing["id"]
-            st.session_state["page"] = next_page
-            self.rerun()
+        col_view, col_save = st.columns([2, 1]) if show_favorite else (None, None)
+        if show_favorite:
+            with col_view:
+                if st.button(button_label, key=button_key, type="primary", use_container_width=True):
+                    st.session_state[selected_key] = listing["id"]
+                    st.session_state["page"] = next_page
+                    self.rerun()
+            with col_save:
+                self.render_save_listing_button(listing)
+        else:
+            if st.button(button_label, key=button_key, type="primary", use_container_width=True):
+                st.session_state[selected_key] = listing["id"]
+                st.session_state["page"] = next_page
+                self.rerun()
 
     def render_listing_detail_sections(self, selected_listing, description_writer="markdown"):
+        st.markdown(self.render_listing_image_html(selected_listing, detail=True), unsafe_allow_html=True)
         with st.container(border=True):
             col_left, col_right = st.columns([3, 1])
             with col_left:
@@ -1448,13 +1742,23 @@ class RealEstateUI:
             chat_key = "agent_chatbot"
             input_version_key = "agent_chat_input_version"
             title = "### 🤖 Agent Assistant"
-            suggestions = ["How do I add a new listing?", "Where do I manage my listings?", "Where do I view buyer requests?"]
+            suggestions = [
+                "What should I do next?",
+                "Summarize my pending requests",
+                "Which listings are available?",
+                "Where do I view buyer requests?"
+            ]
             default_message = "Hi! I’m your agent assistant. Ask me about listings, buyer requests, or adding a property."
         else:
             chat_key = "buyer_chatbot"
             input_version_key = "buyer_chat_input_version"
             title = "### 🤖 Buyer Assistant"
-            suggestions = ["How do I browse listings?", "How do I book an appointment?", "How do I ask a question?"]
+            suggestions = [
+                "What should I do next?",
+                "Which listings should I save?",
+                "How do I book an appointment?",
+                "Do I have any answered inquiries?"
+            ]
             default_message = "Hi! I’m your buyer assistant. Ask me about browsing listings, booking appointments, or sending inquiries."
 
         with st.container(border=True):
@@ -1471,13 +1775,13 @@ class RealEstateUI:
                 if self.service.last_openai_error:
                     st.caption(f"Last OpenAI error: {self.service.last_openai_error}")
 
-            col1, col2, col3 = st.columns(3)
+            suggestion_columns = st.columns(len(suggestions))
 
-            for index, column in enumerate([col1, col2, col3], start=1):
+            for index, column in enumerate(suggestion_columns, start=1):
                 if column.button(suggestions[index - 1], key=f"{role.lower()}_chat_suggestion_btn_{index}", use_container_width=True):
                     user_input = suggestions[index - 1]
                     st.session_state[chat_key].append({"role": "user", "content": user_input})
-                    with st.spinner("Thinking..."):
+                    with st.spinner("AI assistant is typing..."):
                         response = self.generate_chatbot_response(role, user_input, chat_key)
                     st.session_state[chat_key].append({"role": "assistant", "content": response})
                     self.rerun()
@@ -1500,7 +1804,7 @@ class RealEstateUI:
                 user_input = user_input.strip()
                 if user_input:
                     st.session_state[chat_key].append({"role": "user", "content": user_input})
-                    with st.spinner("Thinking..."):
+                    with st.spinner("AI assistant is typing..."):
                         response = self.generate_chatbot_response(role, user_input, chat_key)
                     st.session_state[chat_key].append({"role": "assistant", "content": response})
                     st.session_state[input_version_key] += 1
@@ -1601,6 +1905,7 @@ class RealEstateUI:
             if st.button("View Buyer Requests", key="agent_home_buyer_requests_btn", use_container_width=True):
                 self.go_to_page("buyer_inquiries")
 
+        self.render_agent_next_steps(stats)
         self.render_section_title("Assistant")
         self.show_chat_bot("Agent")
         self.render_agent_recent_activity(stats)
@@ -1648,20 +1953,21 @@ class RealEstateUI:
             selected_type_my, selected_status_my, search_my, sort_my = self.render_listing_filter_controls(
                 "my_type_filter", "my_status_filter", "my_listing_search", "my_listing_sort", self.LISTING_STATUSES
             )
+            self.render_active_filter_summary(selected_type_my, selected_status_my, search_my, sort_my)
             filtered_my_listings = self.service.filter_listings(my_listings_all, selected_type_my, selected_status_my, search_text=search_my)
             filtered_my_listings = self.service.sort_listings(filtered_my_listings, sort_my)
             st.markdown(f"#### My Total Listings: {len(filtered_my_listings)}")
             if not filtered_my_listings:
                 self.render_empty_state("No matching listings", "Try adjusting your search, filters, or sort option.", "🔍")
             else:
-                for listing in filtered_my_listings:
-                    self.render_listing_card(listing, "Manage Listing", f"manage_listing_btn_{listing['id']}", "manage_listing", "selected_agent_listing_id")
+                self.render_listing_grid(filtered_my_listings, "Manage Listing", "manage_listing_btn", "manage_listing", "selected_agent_listing_id")
 
         with taball:
             self.render_section_title("Other Agent Listings")
             selected_type, selected_status, search_other, sort_other = self.render_listing_filter_controls(
                 "all_type_filter", "all_status_filter", "other_listing_search", "other_listing_sort", self.LISTING_STATUSES
             )
+            self.render_active_filter_summary(selected_type, selected_status, search_other, sort_other)
             filtered_properties = self.service.filter_listings(
                 self.data.properties,
                 selected_type,
@@ -1674,8 +1980,7 @@ class RealEstateUI:
             if not filtered_properties:
                 self.render_empty_state("No matching listings", "Try adjusting your search, filters, or sort option.", "🔍")
             else:
-                for listing in filtered_properties:
-                    self.render_listing_card(listing, "View Listing Details", f"view_other_listing_btn_{listing['id']}", "view_other_listing_details", "selected_other_listing_id")
+                self.render_listing_grid(filtered_properties, "View Listing Details", "view_other_listing_btn", "view_other_listing_details", "selected_other_listing_id")
 
     def show_agent_manage_listing_page(self):
         selected_listing = self.service.find_listing_by_id(st.session_state["selected_agent_listing_id"])
@@ -1726,6 +2031,8 @@ class RealEstateUI:
             st.caption("Use a clear title buyers can quickly understand.")
             description = st.text_area("Description", value=selected_listing["description"])
             st.caption("Mention the most important features, location benefits, and property highlights.")
+            image_url = st.text_input("Property Image URL", value=selected_listing.get("image_url", ""), placeholder="https://example.com/property-photo.jpg")
+            st.caption("Optional: paste your own image URL. If left blank, the app automatically uses a stock property photo.")
 
         with st.expander("Contact Information", expanded=True):
             contact_name = st.text_input("Contact Name", value=selected_listing["contact_name"])
@@ -1760,6 +2067,7 @@ class RealEstateUI:
                 updates = {
                     "title": title,
                     "description": description,
+                    "image_url": image_url,
                     "contact_name": contact_name,
                     "contact_email": contact_email,
                     "contact_phone": contact_phone,
@@ -1814,6 +2122,8 @@ class RealEstateUI:
             st.caption("Use a clear title buyers can quickly understand.")
             description = st.text_area("Description", placeholder="Write a short description of the property")
             st.caption("Mention the most important features, location benefits, and property highlights.")
+            image_url = st.text_input("Property Image URL", placeholder="https://example.com/property-photo.jpg")
+            st.caption("Optional: paste your own image URL. If left blank, the app automatically uses a stock property photo.")
 
         with st.expander("Property Details", expanded=True):
             col1, col2 = st.columns(2)
@@ -1860,7 +2170,7 @@ class RealEstateUI:
             success, message, listing = self.service.create_listing(
                 user["id"], title, description, address, city, state, price,
                 bedrooms, bathrooms, property_sqft, property_type, status,
-                contact_name, contact_email, contact_phone
+                contact_name, contact_email, contact_phone, image_url
             )
             if success:
                 self.render_success_summary(
@@ -2020,6 +2330,8 @@ class RealEstateUI:
             self.show_buyer_listing_details_page()
         elif page == "my_inquiries":
             self.show_buyer_bookings_inquiries_page()
+        elif page == "saved_listings":
+            self.show_buyer_saved_listings_page()
         self.render_buyer_sidebar()
 
     def show_buyer_dashboard(self):
@@ -2027,25 +2339,31 @@ class RealEstateUI:
         stats = self.service.calculate_buyer_dashboard_stats(user["id"])
         self.render_page_header(f"Buyer Dashboard - {user['full_name']}", "Browse listings, book appointments, and manage your inquiries.")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             self.render_metric_card("Available Listings", stats["available_listings"], "🏠")
         with col2:
-            self.render_metric_card("My Bookings", stats["my_bookings"], "📅")
+            self.render_metric_card("Saved Listings", stats["saved_listings"], "⭐")
         with col3:
-            self.render_metric_card("Pending Bookings", stats["pending_bookings"], "⏳")
+            self.render_metric_card("My Bookings", stats["my_bookings"], "📅")
         with col4:
+            self.render_metric_card("Pending Bookings", stats["pending_bookings"], "⏳")
+        with col5:
             self.render_metric_card("My Inquiries", stats["my_inquiries"], "💬")
 
         self.render_section_title("Quick Actions")
-        col_a, col_b = st.columns(2)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
             if st.button("Browse Listings", key="buyer_home_browse_btn", type="primary", use_container_width=True):
                 self.go_to_page("browse_listings")
         with col_b:
             if st.button("View My Bookings & Inquiries", key="buyer_home_requests_btn", use_container_width=True):
                 self.go_to_page("my_inquiries")
+        with col_c:
+            if st.button("View Saved Listings", key="buyer_home_saved_btn", use_container_width=True):
+                self.go_to_page("saved_listings")
 
+        self.render_buyer_next_steps(stats)
         self.render_section_title("Assistant")
         self.show_chat_bot("Buyer")
         self.render_buyer_recent_activity(stats)
@@ -2075,6 +2393,7 @@ class RealEstateUI:
             "buyer_type_filter", "buyer_status_filter", "buyer_listing_search", "buyer_listing_sort", self.BUYER_STATUSES
         )
 
+        self.render_active_filter_summary(selected_type, selected_status, search_text, sort_option)
         filtered_properties = self.service.filter_listings(
             self.data.properties,
             selected_type,
@@ -2087,8 +2406,7 @@ class RealEstateUI:
         if not filtered_properties:
             self.render_empty_state("No matching listings", "Try adjusting your search, filters, or sort option.", "🔍")
         else:
-            for listing in filtered_properties:
-                self.render_listing_card(listing, "View Listing Details", f"view_listing_btn_{listing['id']}", "view_listing_details", "selected_listing_id")
+            self.render_listing_grid(filtered_properties, "View Listing Details", "view_listing_btn", "view_listing_details", "selected_listing_id", show_favorite=True)
 
     def show_buyer_listing_details_page(self):
         selected_listing = self.service.find_listing_by_id(st.session_state["selected_listing_id"])
@@ -2100,7 +2418,7 @@ class RealEstateUI:
         self.render_page_header("View Listing Details", "Review property information, book an appointment, or ask the agent a question.")
         self.render_listing_detail_sections(selected_listing, description_writer="write")
 
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
         with col_btn1:
             if st.button("Book an Appointment", key=f"details_book_{selected_listing['id']}", type="primary", use_container_width=True):
                 st.session_state["booking_listing_id"] = selected_listing["id"]
@@ -2110,6 +2428,8 @@ class RealEstateUI:
                 st.session_state["question_listing_id"] = selected_listing["id"]
                 self.rerun()
         with col_btn3:
+            self.render_save_listing_button(selected_listing)
+        with col_btn4:
             if st.button("Back to Listings", key="buyer_details_back_btn", use_container_width=True):
                 st.session_state["page"] = "browse_listings"
                 st.session_state["booking_listing_id"] = None
@@ -2192,6 +2512,25 @@ class RealEstateUI:
                 else:
                     st.error(message)
                     st.stop()
+
+    def show_buyer_saved_listings_page(self):
+        user = self.current_user()
+        saved_listings = self.service.get_saved_listings(user["id"])
+        self.render_top_back_button("← Back to Browse Listings", "browse_listings", "top_back_saved_listings")
+        self.render_page_header("Saved Listings", "Review properties you saved while browsing.")
+        st.markdown(f"#### Saved Listings: {len(saved_listings)}")
+        if not saved_listings:
+            self.render_empty_state("No saved listings yet", "Browse listings and use the Save Listing button to build your shortlist.", "⭐")
+            return
+
+        self.render_listing_grid(
+            saved_listings,
+            "View Listing Details",
+            "view_saved_listing_btn",
+            "view_listing_details",
+            "selected_listing_id",
+            show_favorite=True
+        )
 
     def show_buyer_bookings_inquiries_page(self):
         user = self.current_user()
@@ -2296,6 +2635,7 @@ class RealEstateUI:
             st.markdown(f"**Submitted:** {inquiry.get('created_at', '')}")
             st.markdown("### Agent Response")
             if inquiry.get("response") and inquiry["response"].strip():
+                st.markdown('<span class="answered-badge">Answered by agent</span>', unsafe_allow_html=True)
                 st.markdown(inquiry["response"])
                 if inquiry.get("response_at") and str(inquiry["response_at"]).strip():
                     st.markdown(f"**Responded:** {inquiry['response_at']}")
@@ -2358,6 +2698,8 @@ class RealEstateUI:
                 self.go_to_page("browse_listings")
             if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
                 self.go_to_page("my_inquiries")
+            if st.button("⭐ Saved Listings", key="buyer_nav_saved_listings_btn", type="primary", use_container_width=True):
+                self.go_to_page("saved_listings")
             self.render_sidebar_user_card()
             if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
                 st.session_state["logged_in"] = False
@@ -2370,11 +2712,785 @@ class RealEstateUI:
                 self.rerun()
 
 
+
+
+# =========================
+# ENHANCED PRODUCT UI EXTENSIONS
+# =========================
+
+class EnhancedRealEstateService(RealEstateService):
+    """Adds UI-supporting business logic without changing JSON storage."""
+
+    def advanced_filter_listings(
+        self,
+        listings,
+        selected_type="All",
+        selected_status="All",
+        exclude_agent_id=None,
+        buyer_visible_only=False,
+        search_text="",
+        city="All",
+        min_price=None,
+        max_price=None,
+        min_bedrooms=0,
+        min_bathrooms=0,
+        min_sqft=0,
+    ):
+        filtered = self.filter_listings(
+            listings,
+            selected_type=selected_type,
+            selected_status=selected_status,
+            exclude_agent_id=exclude_agent_id,
+            buyer_visible_only=buyer_visible_only,
+            search_text=search_text,
+        )
+
+        def safe_number(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0
+
+        results = []
+        for listing in filtered:
+            price = safe_number(listing.get("price"))
+            bedrooms = safe_number(listing.get("bedrooms"))
+            bathrooms = safe_number(listing.get("bathrooms"))
+            sqft = safe_number(listing.get("property_sqft"))
+            listing_city = str(listing.get("city", "")).strip()
+
+            if city != "All" and listing_city != city:
+                continue
+            if min_price is not None and price < min_price:
+                continue
+            if max_price is not None and max_price > 0 and price > max_price:
+                continue
+            if bedrooms < min_bedrooms:
+                continue
+            if bathrooms < min_bathrooms:
+                continue
+            if sqft < min_sqft:
+                continue
+            results.append(listing)
+        return results
+
+    def get_listing_cities(self, listings=None):
+        source = listings if listings is not None else self.data.properties
+        cities = sorted({str(listing.get("city", "")).strip() for listing in source if str(listing.get("city", "")).strip()})
+        return ["All"] + cities
+
+    def get_notifications(self, user):
+        notifications = []
+        if not isinstance(user, dict):
+            return notifications
+
+        user_id = user.get("id")
+        role = user.get("role")
+
+        if role == "Agent":
+            pending_bookings = [b for b in self.get_agent_bookings(user_id) if b.get("status") == "Pending"]
+            new_inquiries = [i for i in self.get_agent_inquiries(user_id) if i.get("status") == "New"]
+            if pending_bookings:
+                notifications.append({
+                    "icon": "📅",
+                    "title": f"{len(pending_bookings)} pending appointment request(s)",
+                    "message": "Review and confirm or decline buyer appointment requests.",
+                    "target_page": "buyer_inquiries",
+                    "priority": "High",
+                })
+            if new_inquiries:
+                notifications.append({
+                    "icon": "💬",
+                    "title": f"{len(new_inquiries)} new buyer question(s)",
+                    "message": "Respond to buyer inquiries to keep leads moving.",
+                    "target_page": "buyer_inquiries",
+                    "priority": "High",
+                })
+            if not self.get_agent_listings(user_id):
+                notifications.append({
+                    "icon": "🏠",
+                    "title": "No listings yet",
+                    "message": "Add your first property listing so buyers can discover it.",
+                    "target_page": "add_listings",
+                    "priority": "Medium",
+                })
+
+        if role == "Buyer":
+            buyer_bookings = self.get_buyer_bookings(user_id)
+            buyer_inquiries = self.get_buyer_inquiries(user_id)
+            answered_inquiries = [i for i in buyer_inquiries if str(i.get("response", "")).strip()]
+            confirmed_bookings = [b for b in buyer_bookings if b.get("status") == "Confirmed"]
+            pending_bookings = [b for b in buyer_bookings if b.get("status") == "Pending"]
+            saved_listings = self.get_saved_listings(user_id)
+            if answered_inquiries:
+                notifications.append({
+                    "icon": "✅",
+                    "title": f"{len(answered_inquiries)} answered inquiry/inquiries",
+                    "message": "An agent responded to one or more of your questions.",
+                    "target_page": "my_inquiries",
+                    "priority": "High",
+                })
+            if confirmed_bookings:
+                notifications.append({
+                    "icon": "📅",
+                    "title": f"{len(confirmed_bookings)} confirmed appointment(s)",
+                    "message": "Check your appointment details before your tour.",
+                    "target_page": "my_inquiries",
+                    "priority": "High",
+                })
+            if pending_bookings:
+                notifications.append({
+                    "icon": "⏳",
+                    "title": f"{len(pending_bookings)} pending appointment request(s)",
+                    "message": "Your request is waiting for the agent to confirm or decline.",
+                    "target_page": "my_inquiries",
+                    "priority": "Medium",
+                })
+            if not saved_listings:
+                notifications.append({
+                    "icon": "⭐",
+                    "title": "No saved listings yet",
+                    "message": "Save properties you like so you can compare them later.",
+                    "target_page": "browse_listings",
+                    "priority": "Medium",
+                })
+
+        if not notifications:
+            notifications.append({
+                "icon": "✨",
+                "title": "You’re all caught up",
+                "message": "No urgent app notifications right now.",
+                "target_page": "home",
+                "priority": "Low",
+            })
+        return notifications
+
+    def group_bookings_by_date(self, bookings):
+        grouped = {}
+        for booking in bookings:
+            date_key = str(booking.get("appointment_date", "No date"))
+            grouped.setdefault(date_key, []).append(booking)
+        return dict(sorted(grouped.items(), key=lambda item: item[0]))
+
+    def update_user_profile(self, user_id, full_name, email):
+        full_name = str(full_name or "").strip()
+        email = self.normalize_email(str(email or ""))
+        if not full_name or not email:
+            return False, "Please enter your full name and email.", None
+        if not self.is_valid_email(email):
+            return False, "Enter a valid email address.", None
+
+        existing_user = self.find_user_by_email(email)
+        if existing_user and existing_user.get("id") != user_id:
+            return False, "Another account already uses this email.", None
+
+        updated_user = self.data.update_user(user_id, {"full_name": full_name, "email": email})
+        if updated_user is None:
+            return False, "User not found.", None
+        return True, "Profile updated successfully.", updated_user
+
+    def update_user_password(self, user_id, current_password, new_password, confirm_password):
+        user = self.data.find_record_by_id(self.data.users, user_id)
+        if user is None:
+            return False, "User not found."
+        if not current_password or not new_password or not confirm_password:
+            return False, "Please fill in all password fields."
+        if not self.verify_password(current_password, user.get("password", "")):
+            return False, "Current password is incorrect."
+        if new_password != confirm_password:
+            return False, "New passwords do not match."
+        if len(new_password) < 6:
+            return False, "New password must be at least 6 characters."
+        # Keep compatibility with existing plain-text passwords by storing the new value exactly as entered.
+        self.data.update_user(user_id, {"password": new_password})
+        return True, "Password updated successfully."
+
+
+class EnhancedRealEstateUI(RealEstateUI):
+    """Adds product-style UI features while reusing the original app flow."""
+
+    def apply_base_styles(self):
+        super().apply_base_styles()
+        st.markdown(
+            """
+            <style>
+            .feature-card, .notification-card, .calendar-card, .comparison-card, .profile-card, .assistant-panel, .filter-panel {
+                background: var(--re-surface);
+                border: 1px solid var(--re-border);
+                border-radius: 22px;
+                padding: 1rem 1.1rem;
+                margin: 0.75rem 0;
+                box-shadow: var(--re-shadow);
+            }
+            .notification-top, .calendar-top {
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+            .notification-icon, .calendar-icon {
+                font-size: 1.35rem;
+                margin-right: 0.35rem;
+            }
+            .notification-title, .calendar-title, .comparison-title, .assistant-title {
+                font-weight: 850;
+                color: var(--re-text);
+                font-size: 1.05rem;
+                margin-bottom: 0.2rem;
+            }
+            .notification-message, .calendar-message, .assistant-message {
+                color: var(--re-muted);
+                margin: 0.1rem 0 0 0;
+            }
+            .priority-high {
+                background: rgba(239, 68, 68, 0.14);
+                color: #fca5a5;
+                border-color: rgba(239, 68, 68, 0.3);
+            }
+            .priority-medium {
+                background: rgba(245, 158, 11, 0.14);
+                color: #fcd34d;
+                border-color: rgba(245, 158, 11, 0.3);
+            }
+            .priority-low {
+                background: rgba(34, 197, 94, 0.14);
+                color: #86efac;
+                border-color: rgba(34, 197, 94, 0.3);
+            }
+            .comparison-table-wrap {
+                overflow-x: auto;
+                border-radius: 16px;
+                border: 1px solid var(--re-border);
+            }
+            .comparison-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.92rem;
+            }
+            .comparison-table th, .comparison-table td {
+                border-bottom: 1px solid var(--re-border);
+                padding: 0.75rem;
+                text-align: left;
+                color: var(--re-text);
+                vertical-align: top;
+            }
+            .comparison-table th {
+                color: var(--re-muted);
+                font-weight: 850;
+                background: rgba(255,255,255,0.03);
+            }
+            .filter-panel {
+                position: sticky;
+                top: 1rem;
+            }
+            .assistant-hero {
+                background: linear-gradient(135deg, rgba(99,102,241,0.16), rgba(14,165,233,0.09));
+                border: 1px solid var(--re-border);
+                border-radius: 24px;
+                padding: 1.1rem;
+                margin-bottom: 1rem;
+            }
+            .small-muted {
+                color: var(--re-muted);
+                font-size: 0.9rem;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    def setup_session_state(self):
+        super().setup_session_state()
+        extra_defaults = {
+            "compare_listing_ids": [],
+            "profile_edit_mode": False,
+        }
+        for key, value in extra_defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+
+    def numeric_listing_value(self, listing, key):
+        try:
+            return float(listing.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def render_notification_card(self, notification, key_prefix):
+        priority = str(notification.get("priority", "Low")).lower()
+        priority_class = f"priority-{priority}" if priority in ["high", "medium", "low"] else "status-default"
+        st.markdown(
+            f"""
+            <div class="notification-card">
+                <div class="notification-top">
+                    <div>
+                        <div class="notification-title"><span class="notification-icon">{self.escape(notification.get('icon', '🔔'))}</span>{self.escape(notification.get('title', 'Notification'))}</div>
+                        <p class="notification-message">{self.escape(notification.get('message', ''))}</p>
+                    </div>
+                    <span class="status-badge {priority_class}">{self.escape(notification.get('priority', 'Low'))}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        target_page = notification.get("target_page", "home")
+        if target_page:
+            if st.button("Open", key=f"{key_prefix}_{target_page}_{notification.get('title', '')}", use_container_width=True):
+                self.go_to_page(target_page)
+
+    def render_notification_center(self, limit=None):
+        notifications = self.service.get_notifications(self.current_user())
+        if limit:
+            notifications = notifications[:limit]
+        for index, notification in enumerate(notifications):
+            self.render_notification_card(notification, f"notification_{index}")
+
+    def show_notifications_page(self):
+        self.render_page_header("Notification Center", "Review important activity, next steps, and updates from your real estate workflow.")
+        self.render_notification_center()
+
+    def render_advanced_filter_panel(self, base_listings, prefix, status_options, include_status=True):
+        st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
+        st.markdown("### Filters")
+        search_text = st.text_input(
+            "Search",
+            placeholder="Title, address, city, state...",
+            key=f"{prefix}_search",
+        )
+        selected_type = st.selectbox("Property Type", ["All"] + self.PROPERTY_TYPES, key=f"{prefix}_type")
+        if include_status:
+            selected_status = st.selectbox("Status", ["All"] + status_options, key=f"{prefix}_status")
+        else:
+            selected_status = "All"
+        city = st.selectbox("City", self.service.get_listing_cities(base_listings), key=f"{prefix}_city")
+        st.markdown("**Price Range**")
+        col_min, col_max = st.columns(2)
+        with col_min:
+            min_price = st.number_input("Min", min_value=0, value=0, step=25000, key=f"{prefix}_min_price")
+        with col_max:
+            max_price = st.number_input("Max", min_value=0, value=0, step=25000, key=f"{prefix}_max_price")
+        min_bedrooms = st.slider("Minimum Bedrooms", 0, 8, 0, key=f"{prefix}_min_bedrooms")
+        min_bathrooms = st.slider("Minimum Bathrooms", 0, 8, 0, key=f"{prefix}_min_bathrooms")
+        min_sqft = st.number_input("Minimum Sqft", min_value=0, value=0, step=250, key=f"{prefix}_min_sqft")
+        sort_option = st.selectbox("Sort By", self.listing_sort_options(), key=f"{prefix}_sort")
+        st.markdown('</div>', unsafe_allow_html=True)
+        return {
+            "selected_type": selected_type,
+            "selected_status": selected_status,
+            "search_text": search_text,
+            "sort_option": sort_option,
+            "city": city,
+            "min_price": min_price,
+            "max_price": max_price,
+            "min_bedrooms": min_bedrooms,
+            "min_bathrooms": min_bathrooms,
+            "min_sqft": min_sqft,
+        }
+
+    def filter_and_sort_listings(self, listings, filters, exclude_agent_id=None, buyer_visible_only=False):
+        filtered = self.service.advanced_filter_listings(
+            listings,
+            selected_type=filters["selected_type"],
+            selected_status=filters["selected_status"],
+            exclude_agent_id=exclude_agent_id,
+            buyer_visible_only=buyer_visible_only,
+            search_text=filters["search_text"],
+            city=filters["city"],
+            min_price=filters["min_price"],
+            max_price=filters["max_price"],
+            min_bedrooms=filters["min_bedrooms"],
+            min_bathrooms=filters["min_bathrooms"],
+            min_sqft=filters["min_sqft"],
+        )
+        return self.service.sort_listings(filtered, filters["sort_option"])
+
+    def render_advanced_filter_summary(self, filters):
+        self.render_active_filter_summary(
+            filters["selected_type"],
+            filters["selected_status"],
+            filters["search_text"],
+            filters["sort_option"],
+        )
+        extra_chips = []
+        if filters["city"] != "All":
+            extra_chips.append(f"City: {filters['city']}")
+        if filters["min_price"]:
+            extra_chips.append(f"Min Price: {self.format_price(filters['min_price'])}")
+        if filters["max_price"]:
+            extra_chips.append(f"Max Price: {self.format_price(filters['max_price'])}")
+        if filters["min_bedrooms"]:
+            extra_chips.append(f"Beds: {filters['min_bedrooms']}+")
+        if filters["min_bathrooms"]:
+            extra_chips.append(f"Baths: {filters['min_bathrooms']}+")
+        if filters["min_sqft"]:
+            extra_chips.append(f"Sqft: {filters['min_sqft']}+")
+        if extra_chips:
+            chip_html = "".join(f'<span class="filter-chip">{self.escape(chip)}</span>' for chip in extra_chips)
+            st.markdown(f'<div class="filter-chip-row">{chip_html}</div>', unsafe_allow_html=True)
+
+    def show_agent_properties_page(self):
+        user = self.current_user()
+        my_listings_all = self.service.get_agent_listings(user["id"])
+        other_listings_all = [listing for listing in self.data.properties if listing.get("agent_id") != user["id"]]
+
+        self.render_page_header("View Property Listings", "Use the filter panel to search, sort, and manage listings faster.")
+        tablist, taball = st.tabs([
+            f"My Property Listings ({len(my_listings_all)})",
+            f"Other Property Listings ({len(other_listings_all)})",
+        ])
+
+        with tablist:
+            filter_col, results_col = st.columns([1, 3])
+            with filter_col:
+                filters = self.render_advanced_filter_panel(my_listings_all, "agent_my_advanced", self.LISTING_STATUSES)
+            with results_col:
+                self.render_section_title("My Listings")
+                filtered_my = self.filter_and_sort_listings(my_listings_all, filters)
+                self.render_advanced_filter_summary(filters)
+                st.markdown(f"#### Results: {len(filtered_my)}")
+                if not filtered_my:
+                    self.render_empty_state("No matching listings", "Try widening your price range or removing a filter.", "🔍")
+                else:
+                    self.render_listing_grid(filtered_my, "Manage Listing", "manage_listing_btn", "manage_listing", "selected_agent_listing_id", columns=2)
+
+        with taball:
+            filter_col, results_col = st.columns([1, 3])
+            with filter_col:
+                filters = self.render_advanced_filter_panel(other_listings_all, "agent_other_advanced", self.LISTING_STATUSES)
+            with results_col:
+                self.render_section_title("Other Agent Listings")
+                filtered_other = self.filter_and_sort_listings(self.data.properties, filters, exclude_agent_id=user["id"])
+                self.render_advanced_filter_summary(filters)
+                st.markdown(f"#### Results: {len(filtered_other)}")
+                if not filtered_other:
+                    self.render_empty_state("No matching listings", "Try adjusting the filters or search box.", "🔍")
+                else:
+                    self.render_listing_grid(filtered_other, "View Listing Details", "view_other_listing_btn", "view_other_listing_details", "selected_other_listing_id", columns=2)
+
+    def show_buyer_browse_listings_page(self):
+        self.render_page_header("View Property Listings", "Use advanced filters to narrow down properties by price, city, bedrooms, bathrooms, and square footage.")
+        visible_base = [listing for listing in self.data.properties if listing.get("status") != "Sold"]
+        filter_col, results_col = st.columns([1, 3])
+        with filter_col:
+            filters = self.render_advanced_filter_panel(visible_base, "buyer_advanced", self.BUYER_STATUSES)
+        with results_col:
+            filtered_properties = self.filter_and_sort_listings(self.data.properties, filters, buyer_visible_only=True)
+            self.render_advanced_filter_summary(filters)
+            st.markdown(f"#### Total Available Listings: {len(filtered_properties)}")
+            if not filtered_properties:
+                self.render_empty_state("No matching listings", "Try adjusting your price range, city, or bedroom filters.", "🔍")
+            else:
+                self.render_listing_grid(filtered_properties, "View Listing Details", "view_listing_btn", "view_listing_details", "selected_listing_id", show_favorite=True, columns=2)
+
+    def render_comparison_table(self, listings):
+        if len(listings) < 2:
+            self.render_empty_state("Choose at least two listings", "Select 2 or 3 saved listings above to compare them side by side.", "⚖️")
+            return
+
+        fields = [
+            ("Price", lambda l: self.format_price(l.get("price", 0))),
+            ("Bedrooms", lambda l: l.get("bedrooms", 0)),
+            ("Bathrooms", lambda l: l.get("bathrooms", 0)),
+            ("Square Feet", lambda l: l.get("property_sqft", 0)),
+            ("Type", lambda l: l.get("property_type", "")),
+            ("Status", lambda l: l.get("status", "")),
+            ("City", lambda l: l.get("city", "")),
+            ("Address", lambda l: f"{l.get('address', '')}, {l.get('state', '')}"),
+        ]
+        header_cells = "".join(f"<th>{self.escape(listing.get('title', 'Listing'))}</th>" for listing in listings)
+        rows = []
+        for label, getter in fields:
+            value_cells = "".join(f"<td>{self.escape(getter(listing))}</td>" for listing in listings)
+            rows.append(f"<tr><th>{self.escape(label)}</th>{value_cells}</tr>")
+        st.markdown(
+            f"""
+            <div class="comparison-card">
+                <div class="comparison-title">Property Comparison</div>
+                <div class="comparison-table-wrap">
+                    <table class="comparison-table">
+                        <tr><th>Feature</th>{header_cells}</tr>
+                        {''.join(rows)}
+                    </table>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    def show_buyer_saved_listings_page(self):
+        user = self.current_user()
+        saved_listings = self.service.get_saved_listings(user["id"])
+        self.render_top_back_button("← Back to Browse Listings", "browse_listings", "top_back_saved_listings")
+        self.render_page_header("Saved Listings", "Review, compare, and revisit properties you saved while browsing.")
+        st.markdown(f"#### Saved Listings: {len(saved_listings)}")
+        if not saved_listings:
+            self.render_empty_state("No saved listings yet", "Browse listings and use the Save Listing button to build your shortlist.", "⭐")
+            return
+
+        self.render_section_title("Compare Saved Properties")
+        listing_options = {f"{listing.get('title', 'Listing')} — {self.format_price(listing.get('price', 0))}": listing.get("id") for listing in saved_listings}
+        selected_labels = st.multiselect(
+            "Select 2 or 3 saved listings to compare",
+            list(listing_options.keys()),
+            default=list(listing_options.keys())[:2] if len(listing_options) >= 2 else list(listing_options.keys()),
+            max_selections=3,
+            key="saved_listing_compare_select",
+        )
+        selected_ids = [listing_options[label] for label in selected_labels]
+        selected_listings = [listing for listing in saved_listings if listing.get("id") in selected_ids]
+        self.render_comparison_table(selected_listings)
+
+        self.render_section_title("Saved Listing Cards")
+        self.render_listing_grid(saved_listings, "View Listing Details", "view_saved_listing_btn", "view_listing_details", "selected_listing_id", show_favorite=True, columns=2)
+
+    def render_calendar_booking_view(self, bookings, role):
+        grouped = self.service.group_bookings_by_date(bookings)
+        if not bookings:
+            self.render_empty_state("No appointments", "There are no appointments to show on the calendar yet.", "📅")
+            return
+        for date_key, date_bookings in grouped.items():
+            st.markdown(f"### 📅 {self.escape(date_key)}")
+            for booking in sorted(date_bookings, key=lambda b: str(b.get("appointment_time", ""))):
+                with st.container(border=True):
+                    col_left, col_right = st.columns([3, 1])
+                    with col_left:
+                        st.markdown(f"**{booking.get('appointment_time', '')} — {booking.get('property_title', '')}**")
+                        if role == "Agent":
+                            st.markdown(f"Buyer: {booking.get('buyer_name', '')} • {booking.get('buyer_email', '')}")
+                        else:
+                            st.markdown(f"Type: {booking.get('appointment_type', '')}")
+                        if booking.get("message"):
+                            st.caption(f"Notes: {booking.get('message')}")
+                    with col_right:
+                        self.render_status_badge(booking.get("status", ""))
+
+    def show_agent_buyer_requests_page(self):
+        user = self.current_user()
+        agent_bookings = self.service.get_agent_bookings(user["id"])
+        agent_inquiries = self.service.get_agent_inquiries(user["id"])
+        self.render_page_header("Buyer Bookings & Inquiries", "Confirm appointments, view your calendar, and respond to buyer questions.")
+        tab_bookings, tab_calendar, tab_inquiries = st.tabs([
+            f"View Bookings ({len(agent_bookings)})",
+            "Calendar View",
+            f"View Inquiries ({len(agent_inquiries)})",
+        ])
+
+        with tab_bookings:
+            self.render_section_title("Booking Requests")
+            if not agent_bookings:
+                self.render_empty_state("No booking requests", "You do not have any booking requests.", "📅")
+            else:
+                for booking in agent_bookings:
+                    self.render_agent_booking_request_card(booking)
+
+        with tab_calendar:
+            self.render_section_title("Appointment Calendar")
+            self.render_calendar_booking_view(agent_bookings, "Agent")
+
+        with tab_inquiries:
+            self.render_section_title("Buyer Inquiries")
+            if not agent_inquiries:
+                self.render_empty_state("No buyer inquiries", "You do not have any buyer inquiries.", "💬")
+            else:
+                for inquiry in agent_inquiries:
+                    self.render_agent_inquiry_card(inquiry)
+
+    def show_buyer_bookings_inquiries_page(self):
+        user = self.current_user()
+        my_bookings = self.service.get_buyer_bookings(user["id"])
+        my_inquiries = self.service.get_buyer_inquiries(user["id"])
+        self.render_page_header("My Bookings & Inquiries", "Track appointment requests and questions you sent to agents.")
+        tab_bookings, tab_calendar, tab_inquiries = st.tabs([
+            f"My Bookings ({len(my_bookings)})",
+            "Calendar View",
+            f"My Inquiries ({len(my_inquiries)})",
+        ])
+
+        with tab_bookings:
+            self.render_section_title("My Bookings")
+            if not my_bookings:
+                self.render_empty_state("No bookings yet", "You have not made any bookings yet.", "📅")
+            else:
+                for booking in my_bookings:
+                    self.render_buyer_booking_card(booking)
+
+        with tab_calendar:
+            self.render_section_title("Appointment Calendar")
+            self.render_calendar_booking_view(my_bookings, "Buyer")
+
+        with tab_inquiries:
+            self.render_section_title("My Inquiries")
+            if not my_inquiries:
+                self.render_empty_state("No inquiries yet", "You have not submitted any inquiries yet.", "💬")
+            else:
+                for inquiry in my_inquiries:
+                    self.render_buyer_inquiry_card(inquiry)
+
+    def show_profile_settings_page(self):
+        user = self.current_user()
+        self.render_page_header("Profile & Settings", "Update your basic account information and password.")
+        with st.container(border=True):
+            st.markdown("### Account Information")
+            full_name = st.text_input("Full Name", value=user.get("full_name", ""), key="profile_full_name")
+            email = st.text_input("Email", value=user.get("email", ""), key="profile_email")
+            st.caption(f"Role: {user.get('role', '')}")
+            if st.button("Save Profile", key="save_profile_settings_btn", type="primary", use_container_width=True):
+                success, message, updated_user = self.service.update_user_profile(user["id"], full_name, email)
+                if success:
+                    st.session_state["user"] = updated_user
+                    st.success(message)
+                    self.rerun()
+                else:
+                    st.error(message)
+
+        with st.container(border=True):
+            st.markdown("### Password")
+            current_password = st.text_input("Current Password", type="password", key="profile_current_password")
+            new_password = st.text_input("New Password", type="password", key="profile_new_password")
+            confirm_password = st.text_input("Confirm New Password", type="password", key="profile_confirm_password")
+            if st.button("Update Password", key="update_profile_password_btn", use_container_width=True):
+                success, message = self.service.update_user_password(user["id"], current_password, new_password, confirm_password)
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
+
+    def show_ai_assistant_page(self):
+        user = self.current_user()
+        role = user.get("role", "Buyer")
+        self.render_page_header("AI Assistant", "Ask about listings, appointments, inquiries, filters, next steps, or how to use the app.")
+        left, right = st.columns([1, 2])
+        with left:
+            st.markdown(
+                """
+                <div class="assistant-hero">
+                    <div class="assistant-title">What I can help with</div>
+                    <p class="assistant-message">Use the assistant to understand your dashboard, summarize activity, compare saved listings, or decide what to do next.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            self.render_notification_center(limit=3)
+        with right:
+            self.show_chat_bot(role)
+
+    def show_agent_dashboard(self):
+        super().show_agent_dashboard()
+        self.render_section_title("Notification Center")
+        self.render_notification_center(limit=3)
+
+    def show_buyer_dashboard(self):
+        super().show_buyer_dashboard()
+        self.render_section_title("Notification Center")
+        self.render_notification_center(limit=3)
+
+    def show_main_app_agent(self):
+        page = st.session_state["page"]
+        if page == "notifications":
+            self.show_notifications_page()
+        elif page == "profile_settings":
+            self.show_profile_settings_page()
+        elif page == "assistant":
+            self.show_ai_assistant_page()
+        else:
+            # Render normal inherited pages without inherited sidebar, then add enhanced sidebar once.
+            if page == "home":
+                self.show_agent_dashboard()
+            elif page == "properties_listings":
+                self.show_agent_properties_page()
+            elif page == "manage_listing":
+                self.show_agent_manage_listing_page()
+            elif page == "edit_listing":
+                self.show_agent_edit_listing_page()
+            elif page == "view_other_listing_details":
+                self.show_agent_other_listing_details_page()
+            elif page == "add_listings":
+                self.show_agent_add_listing_page()
+            elif page == "buyer_inquiries":
+                self.show_agent_buyer_requests_page()
+        self.render_agent_sidebar()
+
+    def show_main_app_buyer(self):
+        page = st.session_state["page"]
+        if page == "notifications":
+            self.show_notifications_page()
+        elif page == "profile_settings":
+            self.show_profile_settings_page()
+        elif page == "assistant":
+            self.show_ai_assistant_page()
+        else:
+            if page == "home":
+                self.show_buyer_dashboard()
+            elif page == "browse_listings":
+                self.show_buyer_browse_listings_page()
+            elif page == "view_listing_details":
+                self.show_buyer_listing_details_page()
+            elif page == "my_inquiries":
+                self.show_buyer_bookings_inquiries_page()
+            elif page == "saved_listings":
+                self.show_buyer_saved_listings_page()
+        self.render_buyer_sidebar()
+
+    def render_agent_sidebar(self):
+        with st.sidebar:
+            st.markdown("# **Navigator**")
+            if st.button("🏠 Dashboard", key="agent_nav_dashboard_btn", type="primary", use_container_width=True):
+                self.go_to_page("home")
+            if st.button("🔍 View/Manage Property Listings", key="agent_nav_properties_btn", type="primary", use_container_width=True):
+                self.go_to_page("properties_listings")
+            if st.button("➕ Add Property Listings", key="agent_nav_add_listing_btn", type="primary", use_container_width=True):
+                self.go_to_page("add_listings")
+            if st.button("📖 Buyer Bookings & Inquiries", key="agent_nav_buyer_requests_btn", type="primary", use_container_width=True):
+                self.go_to_page("buyer_inquiries")
+            if st.button("🔔 Notifications", key="agent_nav_notifications_btn", type="primary", use_container_width=True):
+                self.go_to_page("notifications")
+            if st.button("🤖 AI Assistant", key="agent_nav_assistant_btn", type="primary", use_container_width=True):
+                self.go_to_page("assistant")
+            if st.button("⚙️ Profile & Settings", key="agent_nav_profile_btn", type="primary", use_container_width=True):
+                self.go_to_page("profile_settings")
+            self.render_sidebar_user_card()
+            if st.button("🚪 Log Out", key="agent_nav_logout_btn", type="primary", use_container_width=True):
+                st.session_state["logged_in"] = False
+                st.session_state["user"] = None
+                st.session_state["page"] = "home"
+                st.session_state["selected_agent_listing_id"] = None
+                st.session_state["selected_other_listing_id"] = None
+                st.success("Logout Succesful")
+                time.sleep(0.5)
+                self.rerun()
+
+    def render_buyer_sidebar(self):
+        with st.sidebar:
+            st.markdown("# **Navigator**")
+            if st.button("🏠 Dashboard", key="buyer_nav_dashboard_btn", type="primary", use_container_width=True):
+                self.go_to_page("home")
+            if st.button("🔍 Browse Listings", key="buyer_nav_browse_btn", type="primary", use_container_width=True):
+                self.go_to_page("browse_listings")
+            if st.button("📅 My Bookings & Inquiries", key="buyer_nav_requests_btn", type="primary", use_container_width=True):
+                self.go_to_page("my_inquiries")
+            if st.button("⭐ Saved Listings", key="buyer_nav_saved_listings_btn", type="primary", use_container_width=True):
+                self.go_to_page("saved_listings")
+            if st.button("🔔 Notifications", key="buyer_nav_notifications_btn", type="primary", use_container_width=True):
+                self.go_to_page("notifications")
+            if st.button("🤖 AI Assistant", key="buyer_nav_assistant_btn", type="primary", use_container_width=True):
+                self.go_to_page("assistant")
+            if st.button("⚙️ Profile & Settings", key="buyer_nav_profile_btn", type="primary", use_container_width=True):
+                self.go_to_page("profile_settings")
+            self.render_sidebar_user_card()
+            if st.button("🚪 Log Out", key="buyer_nav_logout_btn", type="primary", use_container_width=True):
+                st.session_state["logged_in"] = False
+                st.session_state["user"] = None
+                st.session_state["page"] = "home"
+                st.session_state["booking_listing_id"] = None
+                st.session_state["selected_listing_id"] = None
+                st.success("Logout Succesful")
+                time.sleep(0.5)
+                self.rerun()
+
 # =========================
 # APP ENTRY POINT
 # =========================
 
 data = RealEstateData()
-service = RealEstateService(data)
-ui = RealEstateUI(service)
+service = EnhancedRealEstateService(data)
+ui = EnhancedRealEstateUI(service)
 ui.run()

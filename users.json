@@ -1,26 +1,33 @@
 [
-      {
-            "id": "2dc79333-19fa-4756-9d95-ac957594e78a",
-            "email": "tyshawn@udel.edu",
-            "full_name": "TyShawn Elzey",
-            "password": "codingisfun",
-            "role": "Agent",
-            "registered_at": "2026-03-18 13:08:43.926571"
-      },
-      {
-            "id": "68507c1c-b2c4-4111-8dd2-0bd6abed33b3",
-            "email": "tyshawnelzey@gmail.com",
-            "full_name": "E Ty",
-            "password": "funiscoding",
-            "role": "Buyer",
-            "registered_at": "2026-03-18 13:25:32.643125"
-      },
-      {
-            "id": "1b447e58-9b3f-4476-87d4-7bc37294cf1e",
-            "email": "tyshawn@gmail.com",
-            "full_name": "Elzey TyShawn",
-            "password": "codingisfun",
-            "role": "Agent",
-            "registered_at": "2026-03-23 18:55:07.744137"
-      }
+    {
+        "id": "2dc79333-19fa-4756-9d95-ac957594e78a",
+        "email": "tyshawn@udel.edu",
+        "full_name": "TyShawn Elzey",
+        "password": "codingisfun",
+        "role": "Agent",
+        "registered_at": "2026-03-18 13:08:43.926571",
+        "saved_listing_ids": []
+    },
+    {
+        "id": "68507c1c-b2c4-4111-8dd2-0bd6abed33b3",
+        "email": "tyshawnelzey@gmail.com",
+        "full_name": "E Ty",
+        "password": "funiscoding",
+        "role": "Buyer",
+        "registered_at": "2026-03-18 13:25:32.643125",
+        "saved_listing_ids": [
+            "j0e5f6g7-0000-4jjj-jjjj-000000000000",
+            "e5f6g7h8-5555-4eee-eeee-555555555555",
+            "c3f4d5e6-3333-4ccc-cccc-333333333333"
+        ]
+    },
+    {
+        "id": "1b447e58-9b3f-4476-87d4-7bc37294cf1e",
+        "email": "tyshawn@gmail.com",
+        "full_name": "Elzey TyShawn",
+        "password": "codingisfun",
+        "role": "Agent",
+        "registered_at": "2026-03-23 18:55:07.744137",
+        "saved_listing_ids": []
+    }
 ]
