@@ -244,7 +244,7 @@ class RealEstateService:
     APPOINTMENT_START = dt_time(8, 0)
     APPOINTMENT_END = dt_time(17, 0)
 
-    def __init__(self, data, openai_api_key=None, openai_model="gpt-4.1-mini"):
+    def __init__(self, data, openai_api_key=None, openai_model="gpt-4o-mini"):
         self.data = data
         self.openai_api_key = openai_api_key
         self.openai_model = openai_model
@@ -252,15 +252,27 @@ class RealEstateService:
         self.configure_openai(openai_api_key, openai_model)
 
     def configure_openai(self, api_key=None, model=None):
-        self.openai_api_key = api_key or self.openai_api_key
-        self.openai_model = model or self.openai_model
+        self.openai_api_key = (api_key or self.openai_api_key or "").strip()
+        self.openai_model = (model or self.openai_model or "gpt-4o-mini").strip()
+        self.last_openai_error = ""
 
-        if OpenAI is None or not self.openai_api_key:
+        if OpenAI is None:
             self.openai_client = None
+            self.last_openai_error = "OpenAI Python package is not installed. Add openai>=1.99.0 to requirements.txt."
             return False
 
-        self.openai_client = OpenAI(api_key=self.openai_api_key)
-        return True
+        if not self.openai_api_key:
+            self.openai_client = None
+            self.last_openai_error = "OPENAI_API_KEY was not found in Streamlit secrets or environment variables."
+            return False
+
+        try:
+            self.openai_client = OpenAI(api_key=self.openai_api_key)
+            return True
+        except Exception as error:
+            self.openai_client = None
+            self.last_openai_error = f"{type(error).__name__}: {error}"
+            return False
 
     def openai_is_ready(self):
         return self.openai_client is not None
@@ -761,10 +773,16 @@ class RealEstateService:
         return "\n".join(lines)
 
     def get_openai_chatbot_response(self, role, user_input, messages=None, current_user=None):
+        fallback_answer = (
+            self.get_agent_chatbot_response(user_input)
+            if role == "Agent"
+            else self.get_buyer_chatbot_response(user_input)
+        )
+
         if not self.openai_is_ready():
-            if role == "Agent":
-                return self.get_agent_chatbot_response(user_input)
-            return self.get_buyer_chatbot_response(user_input)
+            if self.last_openai_error:
+                return f"OpenAI is not ready: {self.last_openai_error}\n\nFallback answer: {fallback_answer}"
+            return fallback_answer
 
         app_context = self.build_chat_context(role, current_user)
         chat_history = self.format_chat_history_for_model(messages)
@@ -791,16 +809,21 @@ USER QUESTION:
 """.strip()
 
         try:
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=self.openai_model,
-                instructions=instructions,
-                input=prompt,
-                max_output_tokens=350,
+                messages=[
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=500,
             )
-            answer = str(response.output_text).strip()
+            answer = response.choices[0].message.content
+            answer = str(answer).strip() if answer else ""
             return answer or "I could not generate a response. Please try again."
-        except Exception as exc:
-            return f"I had trouble connecting to OpenAI just now. Fallback answer: {self.get_agent_chatbot_response(user_input) if role == 'Agent' else self.get_buyer_chatbot_response(user_input)}"
+        except Exception as error:
+            self.last_openai_error = f"{type(error).__name__}: {error}"
+            return f"OpenAI error: {self.last_openai_error}\n\nFallback answer: {fallback_answer}"
 
 
 # =========================
@@ -1168,7 +1191,7 @@ class RealEstateUI:
 
     def configure_openai_from_secrets(self):
         api_key = os.environ.get("OPENAI_API_KEY")
-        model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
         try:
             api_key = api_key or st.secrets.get("OPENAI_API_KEY")
@@ -1440,6 +1463,13 @@ class RealEstateUI:
                 st.caption(f"OpenAI connected with model: {self.service.openai_model}. Choose a suggested question or type your own below.")
             else:
                 st.caption("OpenAI is not configured yet, so the assistant is using the built-in fallback responses.")
+
+            with st.expander("OpenAI connection debug", expanded=False):
+                st.caption(f"OpenAI SDK installed: {OpenAI is not None}")
+                st.caption(f"OpenAI key found: {bool(self.service.openai_api_key)}")
+                st.caption(f"OpenAI client ready: {self.service.openai_client is not None}")
+                if self.service.last_openai_error:
+                    st.caption(f"Last OpenAI error: {self.service.last_openai_error}")
 
             col1, col2, col3 = st.columns(3)
 
