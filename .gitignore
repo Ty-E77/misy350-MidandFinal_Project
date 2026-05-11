@@ -10,3 +10,5 @@ setup_strater.py
 requirements.txt
 _restructure.py
 .devcontainer
+app2.py
+.streamlit
